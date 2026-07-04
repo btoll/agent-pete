@@ -1,0 +1,9 @@
+agent-pete
+*.[oa]
+*.out
+*~
+*.log
+*.db
+sbom.json
+vuln.table
+
