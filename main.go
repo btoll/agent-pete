@@ -2,84 +2,29 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 
 	_ "modernc.org/sqlite"
 )
-
-var (
-	currentMsg          string
-	model               string
-	stream              bool
-	totalResponseTokens int
-)
-
-type ChatRequest struct {
-	Model    string    `json:"model"`
-	Messages []Message `json:"messages"`
-	Stream   bool      `json:"stream"`
-	//https://github.com/ollama/ollama/blob/main/docs/modelfile.mdx#valid-parameters-and-values
-	Options ChatRequestOptions `json:"options"`
-}
-
-type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type ChatRequestOptions struct {
-	NumPredict  int     `json:"num_predict"`
-	Temperature float64 `json:"temperature"`
-	TopP        float64 `json:"top_p"`
-}
-
-type ConfigOption func(*ChatRequest)
-
-func getChatRequest(opts ...ConfigOption) *ChatRequest {
-	chatRequest := &ChatRequest{
-		Model:  "mistral",
-		Stream: true,
-		Options: ChatRequestOptions{
-			NumPredict:  300, // Limit to ~300 tokens max.
-			Temperature: 0.3, // Lower temp = more deterministic, shorter responses.
-			TopP:        0.5, // Reduce diversity.
-		},
-	}
-	for _, opt := range opts {
-		opt(chatRequest)
-	}
-	return chatRequest
-}
 
 func isZeroValue[T comparable](v T) bool {
 	var zero T
 	return zero == v
 }
 
-func withModel(model string) ConfigOption {
-	return func(cr *ChatRequest) {
-		cr.Model = model
-	}
-}
-
-func withStream(stream bool) ConfigOption {
-	return func(cr *ChatRequest) {
-		cr.Stream = stream
-	}
-}
-
-func withTotalResponseTokens(totalResponseTokens int) ConfigOption {
-	return func(cr *ChatRequest) {
-		fmt.Printf("totalResponseTokens=%#v\n", totalResponseTokens)
-		cr.Options.NumPredict = totalResponseTokens
-	}
-}
-
 func main() {
+	var (
+		currentMsg          string
+		model               string
+		oneOff              bool
+		stream              bool
+		totalResponseTokens int
+	)
+
 	flag.StringVar(&currentMsg, "m", "", "The newest message to append to the prompt.")
 	flag.StringVar(&model, "model", "mistral", "The model.")
-	flag.BoolVar(&stream, "stream", true, "True to use the streaming API.")
+	flag.BoolVar(&oneOff, "one-off", false, "Don't include previous messages in the prompt (/generate).")
+	flag.BoolVar(&stream, "stream", true, "True to use the streaming API (/chat).")
 	flag.IntVar(&totalResponseTokens, "tokens", 0, "Total number of response tokens.")
 	flag.Parse()
 
@@ -97,38 +42,49 @@ func main() {
 	if !isZeroValue(totalResponseTokens) {
 		configOptions = append(configOptions, withTotalResponseTokens(totalResponseTokens))
 	}
-	chatRequest := getChatRequest(configOptions...)
 
 	db, err := getDatabase()
 	if err != nil {
 		panic(err)
 	}
 	defer db.Close()
-	recentMessages, err := getRecentMessages(db, 30)
-	if err != nil {
-		panic(err)
+
+	// If /chat...
+	if isZeroValue(oneOff) {
+		chatRequest := NewChatRequest(configOptions...)
+		recentChatMessages, err := chatRequest.GetRecentMessages(30)
+		if err != nil {
+			panic(err)
+		}
+		chatRequest.Messages = append(recentChatMessages, ChatMessage{
+			Role:    "user",
+			Content: currentMsg,
+		})
+		resp, err := chatRequest.Post()
+		if err != nil {
+			panic(err)
+		}
+		err = commit(db, []DBMessage{
+			{
+				Timestamp: "1",
+				Role:      "user",
+				Content:   currentMsg,
+			},
+			{
+				Timestamp: resp.Timestamp,
+				Role:      resp.Role,
+				Content:   resp.Content,
+			},
+		})
+		if err != nil {
+			panic(err)
+		}
+		return
 	}
-	recentMessages = append(recentMessages, Message{
-		Role:    "user",
-		Content: currentMsg,
-	})
-	chatRequest.Messages = recentMessages
-	resp, err := postChat(chatRequest)
-	if err != nil {
-		panic(err)
-	}
-	err = commit(db, []DBMessage{
-		{
-			Timestamp: "1",
-			Role:      "user",
-			Content:   currentMsg,
-		},
-		{
-			Timestamp: resp.Timestamp,
-			Role:      resp.Role,
-			Content:   resp.Content,
-		},
-	})
+
+	generateRequest := NewGenerateRequest(configOptions...)
+	generateRequest.Prompt = currentMsg
+	err = generateRequest.Post()
 	if err != nil {
 		panic(err)
 	}

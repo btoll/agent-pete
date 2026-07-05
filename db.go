@@ -66,7 +66,8 @@ func getDatabase() (*sql.DB, error) {
 	return sql.Open("sqlite", "conversation.db")
 }
 
-func getRecentMessages(db *sql.DB, limit int) ([]Message, error) {
+func getNRecentMessages(limit int) ([]ChatMessage, error) {
+	db, _ := getDatabase()
 	stmt, err := db.Prepare("SELECT role,content FROM messages ORDER BY id DESC LIMIT ?")
 	if err != nil {
 		return nil, err
@@ -76,9 +77,9 @@ func getRecentMessages(db *sql.DB, limit int) ([]Message, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	m := make([]Message, 0, limit)
+	m := make([]ChatMessage, 0, limit)
 	for rows.Next() {
-		msg := Message{}
+		msg := ChatMessage{}
 		err := rows.Scan(&msg.Role, &msg.Content)
 		if err != nil {
 			return nil, err
