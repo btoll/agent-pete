@@ -4,6 +4,6 @@ agent-pete
 *~
 *.log
 *.db
-sbom.json
+*.json
 vuln.table
 

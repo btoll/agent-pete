@@ -17,10 +17,11 @@ import (
 //}
 
 type DBMessage struct {
-	Turn      int    `json:"turn"`
-	Timestamp string `json:"timestamp"`
-	Role      string `json:"role"`
-	Content   string `json:"content"`
+	Turn           int    `json:"turn"`
+	Timestamp      string `json:"timestamp"`
+	Role           string `json:"role"`
+	Content        string `json:"content"`
+	ConversationID string `json:"conversation_id"`
 }
 
 func commit(db *sql.DB, messages []DBMessage) error {
@@ -30,13 +31,13 @@ func commit(db *sql.DB, messages []DBMessage) error {
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.Prepare("INSERT INTO messages (timestamp, role, content) VALUES (?, ?, ?)")
+	stmt, err := tx.Prepare("INSERT INTO messages (timestamp, role, content, conversation_id) VALUES (?, ?, ?, ?)")
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 	for _, message := range messages {
-		_, err := stmt.Exec(message.Timestamp, message.Role, message.Content)
+		_, err := stmt.Exec(message.Timestamp, message.Role, message.Content, message.ConversationID)
 		if err != nil {
 			return err
 		}
@@ -55,7 +56,8 @@ func createTable(db *sql.DB) error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		timestamp TEXT NOT NULL,
 		role TEXT NOT NULL,
-		content TEXT NOT NULL
+		content TEXT NOT NULL,
+		conversation_id TEXT NOT NULL
 	);
 	`
 	_, err := db.Exec(createTableSQL)
@@ -66,13 +68,13 @@ func getDatabase() (*sql.DB, error) {
 	return sql.Open("sqlite", "conversation.db")
 }
 
-func getNRecentMessages(limit int) ([]ChatMessage, error) {
+func getNRecentMessages(conversationID string, limit int) ([]ChatMessage, error) {
 	db, _ := getDatabase()
-	stmt, err := db.Prepare("SELECT role,content FROM messages ORDER BY id DESC LIMIT ?")
+	stmt, err := db.Prepare("SELECT role,content FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT ?")
 	if err != nil {
 		return nil, err
 	}
-	rows, err := stmt.Query(limit)
+	rows, err := stmt.Query(conversationID, limit)
 	if err != nil {
 		return nil, err
 	}

@@ -14,6 +14,7 @@ func isZeroValue[T comparable](v T) bool {
 
 func main() {
 	var (
+		conversationID      string
 		currentMsg          string
 		model               string
 		oneOff              bool
@@ -26,6 +27,7 @@ func main() {
 	flag.BoolVar(&oneOff, "one-off", false, "Don't include previous messages in the prompt (/generate).")
 	flag.BoolVar(&stream, "stream", true, "True to use the streaming API (/chat).")
 	flag.IntVar(&totalResponseTokens, "tokens", 0, "Total number of response tokens.")
+	flag.StringVar(&conversationID, "conv", "default", "Conversation ID for grouping related messages.")
 	flag.Parse()
 
 	if isZeroValue(currentMsg) {
@@ -52,7 +54,7 @@ func main() {
 	// If /chat...
 	if isZeroValue(oneOff) {
 		chatRequest := NewChatRequest(configOptions...)
-		recentChatMessages, err := chatRequest.GetRecentMessages(30)
+		recentChatMessages, err := chatRequest.GetRecentMessages(conversationID, 30)
 		if err != nil {
 			panic(err)
 		}
@@ -66,14 +68,16 @@ func main() {
 		}
 		err = commit(db, []DBMessage{
 			{
-				Timestamp: "1",
-				Role:      "user",
-				Content:   currentMsg,
+				Timestamp:      "1",
+				Role:           "user",
+				Content:        currentMsg,
+				ConversationID: conversationID,
 			},
 			{
-				Timestamp: resp.Timestamp,
-				Role:      resp.Role,
-				Content:   resp.Content,
+				Timestamp:      resp.Timestamp,
+				Role:           resp.Role,
+				Content:        resp.Content,
+				ConversationID: conversationID,
 			},
 		})
 		if err != nil {

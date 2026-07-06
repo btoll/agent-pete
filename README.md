@@ -8,6 +8,8 @@ There is a limited number CLI options that are supported.  The default is to hit
 
 ```bash
 Usage of ./agent-pete:
+  -conv string
+        Conversation ID for grouping related messages. (default "default")
   -m string
         The newest message to append to the prompt.
   -model string
@@ -15,7 +17,7 @@ Usage of ./agent-pete:
   -one-off
         Don't include previous messages in the prompt (/generate).
   -stream
-        True to use the streaming API. (default true)
+        True to use the streaming API (/chat). (default true)
   -tokens int
         Total number of response tokens.
 ```
@@ -37,6 +39,11 @@ sqlite> pragma table_info(messages);
 2|role|TEXT|1||0
 3|content|TEXT|1||0
 ```
+
+DROP INDEX idx_conversation_id;
+ALTER TABLE messages DROP COLUMN conversation_id;
+ALTER TABLE messages ADD COLUMN conversation_id TEXT NOT NULL;
+CREATE INDEX idx_conversation_id ON messages(conversation_id);
 
 ## Model Responses
 

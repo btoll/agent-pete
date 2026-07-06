@@ -41,8 +41,8 @@ func NewChatRequest(opts ...ConfigOption) *ChatRequest {
 	return chatRequest
 }
 
-func (c *ChatRequest) GetRecentMessages(limit int) ([]ChatMessage, error) {
-	return getNRecentMessages(limit)
+func (c *ChatRequest) GetRecentMessages(conversationID string, limit int) ([]ChatMessage, error) {
+	return getNRecentMessages(conversationID, limit)
 }
 
 func (c *ChatRequest) Post() (*PostResponse, error) {
