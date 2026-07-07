@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"bufio"
@@ -17,8 +17,9 @@ type GenerateRequest struct {
 	Think  bool   `json:"think"`
 }
 
-func NewGenerateRequest(opts ...ConfigOption) *GenerateRequest {
+func NewGenerateRequest(msg string, opts ...ConfigOption) *GenerateRequest {
 	generateRequest := &GenerateRequest{
+		Prompt: msg,
 		Request: Request{
 			Model:  "mistral",
 			Stream: true,

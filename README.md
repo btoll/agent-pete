@@ -7,9 +7,12 @@ Currenty, `agent-pete` supports the [`generate`](https://docs.ollama.com/api/gen
 There is a limited number CLI options that are supported.  The default is to hit the `chat` endpoint unless `--one-off` is passed as a flag, at which point `agent-pete` will call the `generate` endpoint.
 
 ```bash
+$ ./agent-pete -h
 Usage of ./agent-pete:
   -conv string
         Conversation ID for grouping related messages. (default "default")
+  -create-database
+        Create the database.  Useful for debugging.
   -m string
         The newest message to append to the prompt.
   -model string
@@ -20,6 +23,8 @@ Usage of ./agent-pete:
         True to use the streaming API (/chat). (default true)
   -tokens int
         Total number of response tokens.
+  -tool value
+        The name of a tool (function).  Can accept specified multiple times.  Primarily used for debugging, but it can help limit tokens spent by reducing the request payload.
 ```
 
 This will change!  The code will change!  You will change!  Change is inevitable!
@@ -29,6 +34,15 @@ This will change!  The code will change!  You will change!  Change is inevitable
 The `generate` API does not include any previous messages (context) in its prompt when `POST`ed to the Ollama server (model?).  It is a one-off, with the question and the response NOT being persisted.
 
 The `chat` API, on the other hand, will include previous messages in its prompt.  It default to 30, which is low, but the context window for the `mistral` model is quite small.  In addition, it will persist both the question ("role": "user") and the response ("role": "assistant") to a local [SQLite](https://sqlite.org/index.html) database.
+
+```bash
+$ ollama list
+NAME                   ID              SIZE      MODIFIED
+mistral-nemo:latest    e7e06d107c6c    7.1 GB    18 minutes ago
+llama3.1:latest        46e0c10c039e    4.9 GB    36 minutes ago
+neural-chat:latest     89fa737d3b85    4.1 GB    14 hours ago
+mistral:latest         6577803aa9a0    4.4 GB    2 days ago
+```
 
 ## Database Schema
 
@@ -81,6 +95,53 @@ This is the last chunk sent by the server (because `"done": true`).  Note that i
   "eval_duration": 92728962000
 }
 ```
+
+//&api.PostResponse{
+//	Role:    "assistant",
+//	Content: "",
+//	Message: api.Message{
+//		Role:    "assistant",
+//		Content: "",
+//		ToolCalls: []api.ToolCall{
+//			{
+//				ID: "call_tjtt6c2r",
+//				Function: api.Function2{
+//					Index:       0,
+//					Name:        "ReadFile",
+//					Description: "",
+//					Arguments: map[string]interface{}{
+//						"filename": "testy.txt",
+//					},
+//				},
+//			},
+//		},
+//	},
+//}
+
+//api.ToolCall{
+//    ID: "call_yjo7vyfb",
+//    Function: api.Function2{
+//        Index:       0,
+//        Name:        "Add",
+//        Description: "",
+//        Arguments: map[string]interface{}{
+//            "a": 2,
+//            "b": 2,
+//        },
+//    },
+//}
+
+//api.ToolCall{
+//	ID: "call_4wvxtmue",
+//	Function: api.Function2{
+//		Index:       0,
+//		Name:        "ReadFile",
+//		Description: "",
+//		Arguments: map[string]interface{}{
+//			"filename": "testy.txt",
+//		},
+//	},
+//}
 
 ## Reference
 

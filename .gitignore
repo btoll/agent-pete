@@ -2,6 +2,7 @@ agent-pete
 *.[oa]
 *.out
 *~
+*.bk
 *.log
 *.db
 *.json
