@@ -14,75 +14,10 @@ import (
 	"github.com/btoll/agent-pete/internal/tool"
 )
 
-type Request struct {
-	Model   string         `json:"model"`
-	Stream  bool           `json:"stream"`
-	Options RequestOptions `json:"options"`
-	Tools   []tool.Tool    `json:"tools"`
-}
-
-type RequestOptions struct {
-	//	Seed        int     `json:"seed"`
-	Temperature float64 `json:"temperature"`
-	//	TopK        int     `json:"top_k"`
-	TopP float64 `json:"top_p"`
-	//	MinP        float64 `json:"min_p"`
-	//	Stop        string  `json:"stop"`
-	//	NumCtx      int     `json:"num_ctx"`
-	NumPredict int `json:"num_predict"`
-}
-
-type PostResponse struct {
-	Role    string
-	Content string
-	Message Message
-}
-
-type ChatRequest struct {
-	Request
-	Messages []Message `json:"messages"`
-}
-
-type BaseModelResponse struct {
-	Model              string  `json:"model"`
-	CreatedAt          string  `json:"created_at"`
-	Message            Message `json:"message"`
-	Response           string  `json:"response"`
-	Thinking           string  `json:"thinking"`
-	Done               bool    `json:"done"`
-	DoneReason         string  `json:"done_reason"`
-	TotalDuration      int     `json:"total_duration"`
-	LoadDuration       int     `json:"load_duration"`
-	PromptEvalCount    int     `json:"prompt_eval_count"`
-	PromptEvalDuration int     `json:"prompt_eval_duration"`
-	EvalCount          int     `json:"eval_count"`
-	EvalDuration       int     `json:"eval_duration"`
-}
-
-type Message struct {
-	Role       string     `json:"role"`
-	Content    string     `json:"content"`
-	ToolCallID string     `json:"tool_call_id,omitempty"`
-	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
-}
-
-type ToolCall struct {
-	ID       string    `json:"id"`
-	Function Function2 `json:"function"`
-}
-
-// TODO: Rename this.
-type Function2 struct {
-	//	Index       int            `json:"index"`
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	Arguments   map[string]any `json:"arguments"`
-}
-
 func NewChatRequest(opts ...ConfigOption) *ChatRequest {
 	chatRequest := &ChatRequest{
-		Messages: []Message{
-			{
+		Messages: []OllamaMessage{
+			&SystemMessage{
 				Role:    "system",
 				Content: "You are a helpful assistant with access to tools. When a user asks you to perform a task that matches an available tool, you must call that tool by providing the tool name and parameters in the specified format.",
 			},
@@ -146,16 +81,22 @@ func (c *ChatRequest) Post() (*PostResponse, error) {
 			continue
 		}
 
-		allToolCalls = append(allToolCalls, modelResponse.Message.ToolCalls...)
-		os.Stdout.WriteString(modelResponse.Message.Content)
-		builder.WriteString(modelResponse.Message.Content)
+		if assistantMsg, ok := modelResponse.Message.(*AssistantMessage); ok {
+			allToolCalls = append(allToolCalls, assistantMsg.ToolCalls...)
+		}
+		//		allToolCalls = append(allToolCalls, modelResponse.Message.ToolCalls...)
+
+		os.Stdout.WriteString(modelResponse.Message.GetContent())
+		builder.WriteString(modelResponse.Message.GetContent())
 
 		// Both streaming and non-streaming APIs will work as long as we capture before
 		// Done: true (actually, non-streaming is the one that requires this.
 		if modelResponse.Done {
-			modelResponse.Message.ToolCalls = allToolCalls
+			if assistantMsg, ok := modelResponse.Message.(*AssistantMessage); ok {
+				assistantMsg.ToolCalls = allToolCalls
+			}
 			return &PostResponse{
-				Role:    modelResponse.Message.Role,
+				Role:    modelResponse.Message.GetRole(),
 				Content: builder.String(),
 				Message: modelResponse.Message,
 			}, nil

@@ -4,31 +4,12 @@ import (
 	"os"
 )
 
-//  "tools": [ //    {
-//      "type": "function",
-//      "function": {
-//        "name": "get_weather",
-//        "description": "Get the current weather in a given location",
-//        "parameters": {
-//          "type": "object",
-//          "properties": {
-//            "location": {
-//              "type": "string",
-//              "description": "The city and state, e.g. San Francisco, CA"
-//            }
-//          },
-//          "required": ["location"]
-//        }
-//      }
-//    }
-//  ]
-
 type Tool struct {
 	Type     string
-	Function Function
+	Function ToolFunction
 }
 
-type Function struct {
+type ToolFunction struct {
 	Name        string
 	Description string
 	Parameters  ParameterSchema
@@ -43,7 +24,7 @@ type ParameterSchema struct {
 var Tools = map[string]Tool{
 	"Add": {
 		Type: "function",
-		Function: Function{
+		Function: ToolFunction{
 			Name:        "Add",
 			Description: "Adds two numbers",
 			Parameters: ParameterSchema{
@@ -64,7 +45,7 @@ var Tools = map[string]Tool{
 	},
 	"ReadFile": {
 		Type: "function",
-		Function: Function{
+		Function: ToolFunction{
 			Name:        "ReadFile",
 			Description: "Opens a file and reads it",
 			Parameters: ParameterSchema{

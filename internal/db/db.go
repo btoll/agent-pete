@@ -26,50 +26,33 @@ type Message struct {
 	Tools          []ToolMessage
 }
 
-func Commit(messages []Message) error {
+func CommitMessage(conversationID int, role, content string) (int, error) {
 	db, _ := GetDatabase()
-	tx, err := db.Begin()
+	stmt, err := db.Prepare("INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)")
+	if err != nil {
+		return -1, err
+	}
+	defer stmt.Close()
+	result, err := stmt.Exec(conversationID, role, content)
+	if err != nil {
+		return -1, err
+	}
+	i64, err := result.LastInsertId()
+	if err != nil {
+		return -1, err
+	}
+	return int(i64), nil
+}
+
+func CommitToolCall(lastID int, toolCallID, funcName, arguments, res string) error {
+	db, _ := GetDatabase()
+	stmt, err := db.Prepare("INSERT INTO tool_calls (message_id, tool_call_id, tool_name, parameters, result) VALUES (?, ?, ?, ?, ?)")
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
-
-	messagesStmt, err := tx.Prepare("INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)")
-	if err != nil {
-		return err
-	}
-	defer messagesStmt.Close()
-
-	toolsStmt, err := tx.Prepare("INSERT INTO tool_calls (message_id, tool_call_id, tool_name, parameters) VALUES (?, ?, ?, ?)")
-	if err != nil {
-		return err
-	}
-	defer toolsStmt.Close()
-
-	for _, message := range messages {
-		result, err := messagesStmt.Exec(message.ConversationID, message.Role, message.Content)
-		if err != nil {
-			return err
-		}
-		lastID, err := result.LastInsertId()
-		if err != nil {
-			return err
-		}
-		if len(message.Tools) > 0 {
-			for _, tool := range message.Tools {
-				_, err := toolsStmt.Exec(lastID, tool.ID, tool.Name, tool.Parameters)
-				if err != nil {
-					return err
-				}
-			}
-		}
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return err
-	}
-	return nil
+	defer stmt.Close()
+	_, err = stmt.Exec(lastID, toolCallID, funcName, arguments, res)
+	return err
 }
 
 func CreateDatabase() error {
@@ -172,7 +155,7 @@ func GetNRecentMessages(conversationID int, limit int) ([]*Message, error) {
 
 func GetToolCallsById(messageID int) ([]ToolMessage, error) {
 	db, _ := GetDatabase()
-	stmt, err := db.Prepare("SELECT tool_call_id, tool_name, parameters FROM tool_calls WHERE message_id = ? ORDER BY id")
+	stmt, err := db.Prepare("SELECT tool_call_id, tool_name, parameters, result FROM tool_calls WHERE message_id = ? ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +168,7 @@ func GetToolCallsById(messageID int) ([]ToolMessage, error) {
 	m := []ToolMessage{}
 	for rows.Next() {
 		msg := ToolMessage{}
-		err := rows.Scan(&msg.ID, &msg.Name, &msg.Parameters)
+		err := rows.Scan(&msg.ID, &msg.Name, &msg.Parameters, &msg.Result)
 		if err != nil {
 			return nil, err
 		}
@@ -193,31 +176,3 @@ func GetToolCallsById(messageID int) ([]ToolMessage, error) {
 	}
 	return m, nil
 }
-
-//func Inject() {
-//	db, err := GetDatabase()
-//	if err != nil {
-//		panic(err)
-//	}
-//
-//	err = CreateDatabase()
-//	if err != nil {
-//		panic(err)
-//	}
-//	defer db.Close()
-//
-//	b, err := os.ReadFile("/mnt/shared/context.json")
-//	if err != nil {
-//		panic(err)
-//	}
-//	var messages []Message
-//	err = json.Unmarshal(b, &messages)
-//	if err != nil {
-//		panic(err)
-//	}
-//
-//	err = Commit(messages)
-//	if err != nil {
-//		panic(err)
-//	}
-//}

@@ -11,12 +11,6 @@ import (
 	"os"
 )
 
-type GenerateRequest struct {
-	Request
-	Prompt string `json:"prompt"`
-	Think  bool   `json:"think"`
-}
-
 func NewGenerateRequest(msg string, opts ...ConfigOption) *GenerateRequest {
 	generateRequest := &GenerateRequest{
 		Prompt: msg,
