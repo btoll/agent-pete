@@ -11,6 +11,8 @@ import (
 // Get table schema:
 // sqlite> pragma db_info(TABLE_NAME);
 
+var db *sql.DB
+
 type ToolMessage struct {
 	ID         string
 	Name       string
@@ -26,8 +28,25 @@ type Message struct {
 	Tools          []ToolMessage
 }
 
+func init() {
+	db, err := sql.Open("sqlite", "messages.db")
+	if err != nil {
+		panic(err)
+	}
+	db.SetMaxOpenConns(15)
+	db.SetMaxIdleConns(5)
+}
+
+func CloseDatabase() error {
+	db = GetDatabase()
+	if db != nil {
+		return db.Close()
+	}
+	return nil
+}
+
 func CommitMessage(conversationID int, role, content string) (int, error) {
-	db, _ := GetDatabase()
+	db = GetDatabase()
 	stmt, err := db.Prepare("INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)")
 	if err != nil {
 		return -1, err
@@ -45,7 +64,7 @@ func CommitMessage(conversationID int, role, content string) (int, error) {
 }
 
 func CommitToolCall(lastID int, toolCallID, funcName, arguments, res string) error {
-	db, _ := GetDatabase()
+	db = GetDatabase()
 	stmt, err := db.Prepare("INSERT INTO tool_calls (message_id, tool_call_id, tool_name, parameters, result) VALUES (?, ?, ?, ?, ?)")
 	if err != nil {
 		return err
@@ -56,7 +75,7 @@ func CommitToolCall(lastID int, toolCallID, funcName, arguments, res string) err
 }
 
 func CreateDatabase() error {
-	db, _ := GetDatabase()
+	db = GetDatabase()
 	createTableSQL := `
 	CREATE TABLE IF NOT EXISTS messages (
 		id INTEGER PRIMARY KEY,
@@ -87,14 +106,13 @@ func CreateDatabase() error {
 	);
 
 	CREATE INDEX idx_tool_calls_message ON tool_calls(message_id);
-	CREATE INDEX idx_tool_calls_status ON tool_calls(status);
 	`
 	_, err := db.Exec(createTableSQL)
 	return err
 }
 
 func GetConversationID(name string) (int, error) {
-	db, _ := GetDatabase()
+	db = GetDatabase()
 	stmt, err := db.Prepare("SELECT id FROM conversations WHERE name = ?")
 	if err != nil {
 		return -1, err
@@ -124,12 +142,12 @@ func GetConversationID(name string) (int, error) {
 	return id, err
 }
 
-func GetDatabase() (*sql.DB, error) {
-	return sql.Open("sqlite", "messages.db")
+func GetDatabase() *sql.DB {
+	return db
 }
 
 func GetNRecentMessages(conversationID int, limit int) ([]*Message, error) {
-	db, _ := GetDatabase()
+	db = GetDatabase()
 	stmt, err := db.Prepare("SELECT id, role, content FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT ?")
 	if err != nil {
 		return nil, err
@@ -154,7 +172,7 @@ func GetNRecentMessages(conversationID int, limit int) ([]*Message, error) {
 }
 
 func GetToolCallsById(messageID int) ([]ToolMessage, error) {
-	db, _ := GetDatabase()
+	db = GetDatabase()
 	stmt, err := db.Prepare("SELECT tool_call_id, tool_name, parameters, result FROM tool_calls WHERE message_id = ? ORDER BY id")
 	if err != nil {
 		return nil, err

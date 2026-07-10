@@ -4,6 +4,8 @@ This is a learning project.  I am using the [Ollama project] to build an AI Agen
 
 Currenty, `agent-pete` supports the [`generate`](https://docs.ollama.com/api/generate) and [`chat`](https://docs.ollama.com/api/chat) REST APIs.  `agent-pete` supports both streaming (the default) and non-streaming.
 
+Tools are fully supported.
+
 There is a limited number CLI options that are supported.  The default is to hit the `chat` endpoint unless `--one-off` is passed as a flag, at which point `agent-pete` will call the `generate` endpoint.
 
 ```bash
@@ -47,17 +49,36 @@ mistral:latest         6577803aa9a0    4.4 GB    2 days ago
 ## Database Schema
 
 ```sql
-sqlite> pragma table_info(messages);
-0|id|INTEGER|0||1
-1|timestamp|TEXT|1||0
-2|role|TEXT|1||0
-3|content|TEXT|1||0
-```
+CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY,
+    conversation_id INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(conversation_id) REFERENCES conversations(id)
+);
 
-DROP INDEX idx_conversation_id;
-ALTER TABLE messages DROP COLUMN conversation_id;
-ALTER TABLE messages ADD COLUMN conversation_id TEXT NOT NULL;
-CREATE INDEX idx_conversation_id ON messages(conversation_id);
+CREATE TABLE IF NOT EXISTS conversations (
+    id INTEGER PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT 'btoll',
+    name TEXT UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS tool_calls (
+    id INTEGER PRIMARY KEY,
+    message_id INTEGER NOT NULL,
+    tool_call_id TEXT NOT NULL,
+    tool_name TEXT NOT NULL,
+    parameters TEXT NOT NULL,  -- JSON string, keep for auditing and debugging
+    result TEXT,               -- JSON string, null if not yet executed
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(message_id) REFERENCES messages(id)
+);
+
+CREATE INDEX idx_tool_calls_message ON tool_calls(message_id);
+```
 
 ## Model Responses
 

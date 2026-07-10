@@ -76,6 +76,45 @@ func convertTools(toolMessages []db.ToolMessage) []api.ToolCall {
 	return tc
 }
 
+func executeAgent(chatRequest *api.ChatRequest, conversationID int) {
+	for {
+		resp, err := chatRequest.Post()
+		if err != nil {
+			panic(err)
+		}
+		toolCalls := resp.Message.(*api.AssistantMessage).ToolCalls
+		msg := &api.AssistantMessage{
+			Role:      resp.Role,
+			Content:   resp.Content,
+			ToolCalls: toolCalls,
+		}
+		chatRequest.Messages = append(chatRequest.Messages, msg)
+		lastID, err := db.CommitMessage(conversationID, msg.Role, msg.Content)
+		if len(toolCalls) == 0 {
+			break
+		}
+		for _, toolCall := range toolCalls {
+			var content string
+			res, err := callTool(toolCall)
+			if err != nil {
+				content = err.Error()
+			} else {
+				content = res
+			}
+			chatRequest.Messages = append(chatRequest.Messages, &api.ToolMessage{
+				Role:       "tool",
+				ToolCallID: toolCall.ID,
+				Content:    content,
+			})
+			b, err := json.Marshal(toolCall.Function.Arguments)
+			if err != nil {
+				panic(err)
+			}
+			db.CommitToolCall(lastID, toolCall.ID, toolCall.Function.Name, string(b), res)
+		}
+	}
+}
+
 func getConfigOptions() []api.ConfigOption {
 	var configOptions []api.ConfigOption
 	if !isZeroValue(model) {
@@ -114,14 +153,14 @@ func getPreviousMessages(chatRequest *api.ChatRequest, conversationID int) {
 		}
 	}
 	for _, msg := range recentMessages {
-		chatRequest.Messages = append(chatRequest.Messages, &api.AssistantMessage{
+		chatRequest.Messages = append(chatRequest.Messages, api.AssistantMessage{
 			Role:      msg.Role,
 			Content:   msg.Content,
 			ToolCalls: convertTools(msg.Tools),
 		})
 		if len(msg.Tools) > 0 {
 			for _, tool := range msg.Tools {
-				chatRequest.Messages = append(chatRequest.Messages, &api.ToolMessage{
+				chatRequest.Messages = append(chatRequest.Messages, api.ToolMessage{
 					Role:       "tool",
 					Content:    tool.Result,
 					ToolCallID: tool.ID,
@@ -137,6 +176,13 @@ func isZeroValue[T comparable](v T) bool {
 }
 
 func main() {
+	// TODO: I don't like the responsibility of closing the db to be here.
+	defer func() {
+		if err := db.CloseDatabase(); err != nil {
+			log.Fatalf("error closing database: %v\n", err)
+		}
+	}()
+
 	flag.StringVar(&currentMsg, "m", "", "The newest message to append to the prompt.")
 	flag.StringVar(&model, "model", "mistral", "The model.")
 	flag.BoolVar(&createDatabase, "create-database", false, "Create the database.  Useful for debugging.")
@@ -156,68 +202,31 @@ func main() {
 		log.Fatalln("User prompt is not optional.")
 	}
 
-	conversationID, err := db.GetConversationID(convName)
-	if err != nil {
-		panic(err)
-	}
-
 	if isZeroValue(oneOff) || len(tools) > 0 {
+		conversationID, err := db.GetConversationID(convName)
+		if err != nil {
+			panic(err)
+		}
 		chatRequest := api.NewChatRequest(getConfigOptions()...)
 		if len(tools) > 0 {
 			chatRequest.Stream = false
 		}
 		getPreviousMessages(chatRequest, conversationID)
-		msg := &api.UserMessage{
+		msg := api.UserMessage{
 			Role:    "user",
 			Content: currentMsg,
 		}
 		chatRequest.Messages = append(chatRequest.Messages, msg)
-		_, err := db.CommitMessage(conversationID, msg.Role, msg.Content)
+		_, err = db.CommitMessage(conversationID, msg.Role, msg.Content)
 		if err != nil {
 			panic(err)
 		}
-		fmt.Printf("chatRequest=%#v\n", chatRequest)
-
-		for {
-			resp, err := chatRequest.Post()
-			if err != nil {
-				panic(err)
-			}
-			msg := &api.AssistantMessage{
-				Role:      resp.Role,
-				Content:   resp.Content,
-				ToolCalls: resp.Message.(*api.AssistantMessage).ToolCalls,
-			}
-			chatRequest.Messages = append(chatRequest.Messages, msg)
-			lastID, err := db.CommitMessage(conversationID, msg.Role, msg.Content)
-			if len(resp.Message.(*api.AssistantMessage).ToolCalls) == 0 {
-				break
-			}
-			for _, toolCall := range resp.Message.(*api.AssistantMessage).ToolCalls {
-				var content string
-				res, err := callTool(toolCall)
-				if err != nil {
-					content = err.Error()
-				} else {
-					content = res
-				}
-				chatRequest.Messages = append(chatRequest.Messages, &api.ToolMessage{
-					Role:       "tool",
-					ToolCallID: toolCall.ID,
-					Content:    content,
-				})
-				b, err := json.Marshal(toolCall.Function.Arguments)
-				if err != nil {
-					panic(err)
-				}
-				db.CommitToolCall(lastID, toolCall.ID, toolCall.Function.Name, string(b), res)
-			}
-		}
+		executeAgent(chatRequest, conversationID)
 		return
 	}
 
 	generateRequest := api.NewGenerateRequest(currentMsg, getConfigOptions()...)
-	err = generateRequest.Post()
+	err := generateRequest.Post()
 	if err != nil {
 		panic(err)
 	}

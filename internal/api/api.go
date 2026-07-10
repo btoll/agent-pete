@@ -1,6 +1,8 @@
 package api
 
 import (
+	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"time"
@@ -83,6 +85,56 @@ type BaseModelResponse struct {
 	EvalDuration       int           `json:"eval_duration"`
 }
 
+func (b *BaseModelResponse) UnmarshalJSON(data []byte) error {
+	type Alias BaseModelResponse
+	aux := struct {
+		RawMessage json.RawMessage `json:"message"`
+		*Alias
+	}{
+		Alias: (*Alias)(b),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	var msgMap map[string]any
+	if err := json.Unmarshal(aux.RawMessage, &msgMap); err != nil {
+		return err
+	}
+	role, ok := msgMap["role"].(string)
+	if !ok {
+		return fmt.Errorf("no role field in message")
+	}
+	switch role {
+	case "system":
+		sm := &SystemMessage{}
+		if err := json.Unmarshal(aux.RawMessage, sm); err != nil {
+			return err
+		}
+		b.Message = sm
+	case "user":
+		um := &UserMessage{}
+		if err := json.Unmarshal(aux.RawMessage, um); err != nil {
+			return err
+		}
+		b.Message = um
+	case "assistant":
+		am := &AssistantMessage{}
+		if err := json.Unmarshal(aux.RawMessage, am); err != nil {
+			return err
+		}
+		b.Message = am
+	case "tool":
+		tm := &ToolMessage{}
+		if err := json.Unmarshal(aux.RawMessage, tm); err != nil {
+			return err
+		}
+		b.Message = tm
+	default:
+		return fmt.Errorf("unknown role: %s", role)
+	}
+	return nil
+}
+
 type OllamaMessage interface {
 	GetContent() string
 	GetRole() string
@@ -93,11 +145,11 @@ type SystemMessage struct {
 	Content string `json:"content"`
 }
 
-func (s *SystemMessage) GetContent() string {
+func (s SystemMessage) GetContent() string {
 	return s.Content
 }
 
-func (s *SystemMessage) GetRole() string {
+func (s SystemMessage) GetRole() string {
 	return "system"
 }
 
@@ -106,11 +158,11 @@ type UserMessage struct {
 	Content string `json:"content"`
 }
 
-func (u *UserMessage) GetContent() string {
+func (u UserMessage) GetContent() string {
 	return u.Content
 }
 
-func (u *UserMessage) GetRole() string {
+func (u UserMessage) GetRole() string {
 	return "user"
 }
 
@@ -120,11 +172,11 @@ type AssistantMessage struct {
 	ToolCalls []ToolCall `json:"tool_calls"`
 }
 
-func (a *AssistantMessage) GetContent() string {
+func (a AssistantMessage) GetContent() string {
 	return a.Content
 }
 
-func (a *AssistantMessage) GetRole() string {
+func (a AssistantMessage) GetRole() string {
 	return "assistant"
 }
 
@@ -134,11 +186,11 @@ type ToolMessage struct {
 	ToolCallID string `json:"tool_call_id"`
 }
 
-func (t *ToolMessage) GetContent() string {
+func (t ToolMessage) GetContent() string {
 	return t.Content
 }
 
-func (t *ToolMessage) GetRole() string {
+func (t ToolMessage) GetRole() string {
 	return "tool"
 }
 

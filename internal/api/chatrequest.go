@@ -75,8 +75,8 @@ func (c *ChatRequest) Post() (*PostResponse, error) {
 	var builder strings.Builder
 	var allToolCalls []ToolCall
 	for scanner.Scan() {
-		var modelResponse BaseModelResponse
-		if err := json.Unmarshal(scanner.Bytes(), &modelResponse); err != nil {
+		modelResponse := &BaseModelResponse{}
+		if err := modelResponse.UnmarshalJSON(scanner.Bytes()); err != nil {
 			log.Printf("Failed to unmarshal response: %v", err)
 			continue
 		}
@@ -84,8 +84,6 @@ func (c *ChatRequest) Post() (*PostResponse, error) {
 		if assistantMsg, ok := modelResponse.Message.(*AssistantMessage); ok {
 			allToolCalls = append(allToolCalls, assistantMsg.ToolCalls...)
 		}
-		//		allToolCalls = append(allToolCalls, modelResponse.Message.ToolCalls...)
-
 		os.Stdout.WriteString(modelResponse.Message.GetContent())
 		builder.WriteString(modelResponse.Message.GetContent())
 
