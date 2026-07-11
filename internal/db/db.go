@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"slices"
+
+	_ "modernc.org/sqlite"
 )
 
 // Get DB schema:
@@ -29,7 +31,8 @@ type Message struct {
 }
 
 func init() {
-	db, err := sql.Open("sqlite", "messages.db")
+	var err error
+	db, err = sql.Open("sqlite", "messages.db")
 	if err != nil {
 		panic(err)
 	}

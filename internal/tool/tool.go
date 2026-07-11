@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"fmt"
 	"os"
 )
 
@@ -60,6 +61,27 @@ var Tools = map[string]Tool{
 			},
 		},
 	},
+	"WriteFile": {
+		Type: "function",
+		Function: ToolFunction{
+			Name:        "WriteFile",
+			Description: "Writes data to a file",
+			Parameters: ParameterSchema{
+				Type: "object",
+				Properties: map[string]any{
+					"filename": map[string]any{
+						"type":        "string",
+						"description": "The file to write to",
+					},
+					"data": map[string]any{
+						"type":        "string",
+						"description": "The data to write to the file",
+					},
+				},
+				Required: []string{"filename"},
+			},
+		},
+	},
 }
 
 func Add[T int | float64](a, b T) T {
@@ -72,4 +94,12 @@ func ReadFile(filename string) (string, error) {
 		return "", err
 	}
 	return string(b), nil
+}
+
+func WriteFile(filename string, data string) (string, error) {
+	err := os.WriteFile(fmt.Sprintf("/home/btoll/agent-pete/%s", filename), []byte(data), 0644)
+	if err != nil {
+		return "", err
+	}
+	return "", nil
 }

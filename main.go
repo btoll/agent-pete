@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/btoll/agent-pete/internal/api"
@@ -20,6 +22,7 @@ var (
 	model               string
 	createDatabase      bool
 	oneOff              bool
+	repl                bool
 	stream              bool
 	totalResponseTokens int
 	tools               ToolNames
@@ -55,6 +58,16 @@ func callTool(toolCall api.ToolCall) (string, error) {
 				return tool.ReadFile(filename.(string))
 			}
 			return "", errors.New("argument `filename` not found")
+		case "WriteFile":
+			filename, found := toolCall.Function.Arguments["filename"]
+			if !found {
+				return "", errors.New("argument `filename` not found")
+			}
+			data, found := toolCall.Function.Arguments["data"]
+			if !found {
+				return "", errors.New("argument `data` not found")
+			}
+			return tool.WriteFile(filename.(string), data.(string))
 		}
 	}
 	return "", fmt.Errorf("tool `%s` not found", funcName)
@@ -76,11 +89,11 @@ func convertTools(toolMessages []db.ToolMessage) []api.ToolCall {
 	return tc
 }
 
-func executeAgent(chatRequest *api.ChatRequest, conversationID int) {
+func executeAgent(chatRequest *api.ChatRequest, conversationID int) error {
 	for {
 		toolCalls, lastID, err := processResponse(chatRequest, conversationID)
 		if err != nil {
-			panic(err)
+			return err
 		}
 
 		if len(toolCalls) == 0 {
@@ -89,9 +102,10 @@ func executeAgent(chatRequest *api.ChatRequest, conversationID int) {
 
 		err = processToolCalls(chatRequest, toolCalls, lastID)
 		if err != nil {
-			panic(err)
+			return err
 		}
 	}
+	return nil
 }
 
 func getConfigOptions() []api.ConfigOption {
@@ -157,7 +171,7 @@ func isZeroValue[T comparable](v T) bool {
 func processResponse(chatRequest *api.ChatRequest, conversationID int) ([]api.ToolCall, int, error) {
 	resp, err := chatRequest.Post()
 	if err != nil {
-		panic(err)
+		return nil, -1, err
 	}
 	msg := &api.AssistantMessage{
 		Role:      resp.Role,
@@ -167,7 +181,7 @@ func processResponse(chatRequest *api.ChatRequest, conversationID int) ([]api.To
 	chatRequest.Messages = append(chatRequest.Messages, msg)
 	lastID, err := db.CommitMessage(conversationID, msg.Role, msg.Content)
 	if err != nil {
-		panic(err)
+		return nil, -1, err
 	}
 	return msg.ToolCalls, lastID, nil
 }
@@ -210,9 +224,10 @@ func main() {
 	flag.StringVar(&model, "model", "mistral", "The model.")
 	flag.BoolVar(&createDatabase, "create-database", false, "Create the database.  Useful for debugging.")
 	flag.BoolVar(&oneOff, "one-off", false, "Don't include previous messages in the prompt (/generate).")
+	flag.BoolVar(&repl, "repl", false, "Communicate with the model in a REPL interface.")
 	flag.BoolVar(&stream, "stream", true, "True to use the streaming API (/chat).")
 	flag.IntVar(&totalResponseTokens, "tokens", 0, "Total number of response tokens.")
-	flag.StringVar(&convName, "conv", "default", "Conversation ID for grouping related messages.")
+	flag.StringVar(&convName, "conv", "repl", "Conversation ID for grouping related messages.")
 	flag.Var(&tools, "tool", "The name of a tool (function).  Can accept specified multiple times.  Primarily used for debugging, but it can help limit tokens spent by reducing the request payload.")
 	flag.Parse()
 
@@ -221,20 +236,48 @@ func main() {
 		return
 	}
 
-	if isZeroValue(currentMsg) {
-		log.Fatalln("User prompt is not optional.")
-	}
-
 	if isZeroValue(oneOff) || len(tools) > 0 {
 		conversationID, err := db.GetConversationID(convName)
 		if err != nil {
-			panic(err)
+			log.Panicf("let's panic here %v\n", err)
 		}
+
 		chatRequest := api.NewChatRequest(getConfigOptions()...)
 		if len(tools) > 0 {
 			chatRequest.Stream = false
 		}
 		getPreviousMessages(chatRequest, conversationID)
+		if repl {
+			scanner := bufio.NewScanner(os.Stdin)
+			for {
+				fmt.Printf("\nagent-pete > ")
+				if !scanner.Scan() {
+					break
+				}
+				if err := scanner.Err(); err != nil {
+					log.Fatalf("scanner error: %v\n", err)
+					break
+				}
+				msg := api.UserMessage{
+					Role:    "user",
+					Content: scanner.Text(),
+				}
+				chatRequest.Messages = append(chatRequest.Messages, msg)
+				_, err = db.CommitMessage(conversationID, msg.Role, msg.Content)
+				if err != nil {
+					panic(err)
+				}
+				err = executeAgent(chatRequest, conversationID)
+				if err != nil {
+					log.Fatalf("agent error: %v\n", err)
+					break
+				}
+			}
+			return
+		}
+		if isZeroValue(currentMsg) {
+			log.Fatalln("User prompt is not optional.")
+		}
 		msg := api.UserMessage{
 			Role:    "user",
 			Content: currentMsg,
