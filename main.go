@@ -78,39 +78,18 @@ func convertTools(toolMessages []db.ToolMessage) []api.ToolCall {
 
 func executeAgent(chatRequest *api.ChatRequest, conversationID int) {
 	for {
-		resp, err := chatRequest.Post()
+		toolCalls, lastID, err := processResponse(chatRequest, conversationID)
 		if err != nil {
 			panic(err)
 		}
-		toolCalls := resp.Message.(*api.AssistantMessage).ToolCalls
-		msg := &api.AssistantMessage{
-			Role:      resp.Role,
-			Content:   resp.Content,
-			ToolCalls: toolCalls,
-		}
-		chatRequest.Messages = append(chatRequest.Messages, msg)
-		lastID, err := db.CommitMessage(conversationID, msg.Role, msg.Content)
+
 		if len(toolCalls) == 0 {
 			break
 		}
-		for _, toolCall := range toolCalls {
-			var content string
-			res, err := callTool(toolCall)
-			if err != nil {
-				content = err.Error()
-			} else {
-				content = res
-			}
-			chatRequest.Messages = append(chatRequest.Messages, &api.ToolMessage{
-				Role:       "tool",
-				ToolCallID: toolCall.ID,
-				Content:    content,
-			})
-			b, err := json.Marshal(toolCall.Function.Arguments)
-			if err != nil {
-				panic(err)
-			}
-			db.CommitToolCall(lastID, toolCall.ID, toolCall.Function.Name, string(b), res)
+
+		err = processToolCalls(chatRequest, toolCalls, lastID)
+		if err != nil {
+			panic(err)
 		}
 	}
 }
@@ -173,6 +152,50 @@ func getPreviousMessages(chatRequest *api.ChatRequest, conversationID int) {
 func isZeroValue[T comparable](v T) bool {
 	var zero T
 	return zero == v
+}
+
+func processResponse(chatRequest *api.ChatRequest, conversationID int) ([]api.ToolCall, int, error) {
+	resp, err := chatRequest.Post()
+	if err != nil {
+		panic(err)
+	}
+	msg := &api.AssistantMessage{
+		Role:      resp.Role,
+		Content:   resp.Content,
+		ToolCalls: resp.Message.(*api.AssistantMessage).ToolCalls,
+	}
+	chatRequest.Messages = append(chatRequest.Messages, msg)
+	lastID, err := db.CommitMessage(conversationID, msg.Role, msg.Content)
+	if err != nil {
+		panic(err)
+	}
+	return msg.ToolCalls, lastID, nil
+}
+
+func processToolCalls(chatRequest *api.ChatRequest, toolCalls []api.ToolCall, lastID int) error {
+	for _, toolCall := range toolCalls {
+		var content string
+		res, err := callTool(toolCall)
+		if err != nil {
+			content = err.Error()
+		} else {
+			content = res
+		}
+		chatRequest.Messages = append(chatRequest.Messages, &api.ToolMessage{
+			Role:       "tool",
+			ToolCallID: toolCall.ID,
+			Content:    content,
+		})
+		b, err := json.Marshal(toolCall.Function.Arguments)
+		if err != nil {
+			return err
+		}
+		err = db.CommitToolCall(lastID, toolCall.ID, toolCall.Function.Name, string(b), res)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func main() {
