@@ -8,11 +8,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Get DB schema:
-// sqlite> SELECT sql FROM sqlite_master WHERE type='table';
-// Get table schema:
-// sqlite> pragma db_info(TABLE_NAME);
-
 var db *sql.DB
 
 type ToolMessage struct {
@@ -50,12 +45,16 @@ func CloseDatabase() error {
 
 func CommitMessage(conversationID int, role, content string) (int, error) {
 	db = GetDatabase()
-	stmt, err := db.Prepare("INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)")
+	stmt, err := db.Prepare("INSERT INTO messages (conversation_id, role, content, status) VALUES (?, ?, ?, ?)")
 	if err != nil {
 		return -1, err
 	}
 	defer stmt.Close()
-	result, err := stmt.Exec(conversationID, role, content)
+	status := "pending"
+	if role == "assistant" {
+		status = "success"
+	}
+	result, err := stmt.Exec(conversationID, role, content, status)
 	if err != nil {
 		return -1, err
 	}
@@ -85,6 +84,7 @@ func CreateDatabase() error {
 		conversation_id INTEGER NOT NULL,
 		role TEXT NOT NULL,
 		content TEXT,
+		status TEXT NOT NULL,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY(conversation_id) REFERENCES conversations(id)
 	);
@@ -151,7 +151,7 @@ func GetDatabase() *sql.DB {
 
 func GetNRecentMessages(conversationID int, limit int) ([]*Message, error) {
 	db = GetDatabase()
-	stmt, err := db.Prepare("SELECT id, role, content FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT ?")
+	stmt, err := db.Prepare("SELECT id, role, content FROM messages WHERE conversation_id = ? AND status = 'success' ORDER BY id DESC LIMIT ?")
 	if err != nil {
 		return nil, err
 	}
@@ -196,4 +196,18 @@ func GetToolCallsById(messageID int) ([]ToolMessage, error) {
 		m = append(m, msg)
 	}
 	return m, nil
+}
+
+func UpdateMessageStatus(rowID int, status string) error {
+	db = GetDatabase()
+	stmt, err := db.Prepare("UPDATE messages SET status = ? WHERE id = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec(status, rowID)
+	if err != nil {
+		return err
+	}
+	return nil
 }

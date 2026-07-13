@@ -7,8 +7,10 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/btoll/agent-pete/internal/api"
 	"github.com/btoll/agent-pete/internal/db"
@@ -93,7 +95,12 @@ func executeAgent(chatRequest *api.ChatRequest, conversationID int) error {
 	for {
 		toolCalls, lastID, err := processResponse(chatRequest, conversationID)
 		if err != nil {
-			return err
+			return &api.InferenceError{
+				Backend: "ollama",
+				Model:   chatRequest.Model,
+				Op:      "processResponse",
+				Err:     err,
+			}
 		}
 
 		if len(toolCalls) == 0 {
@@ -171,7 +178,7 @@ func isZeroValue[T comparable](v T) bool {
 func processResponse(chatRequest *api.ChatRequest, conversationID int) ([]api.ToolCall, int, error) {
 	resp, err := chatRequest.Post()
 	if err != nil {
-		return nil, -1, err
+		return nil, -1, fmt.Errorf("processResponse: %w", err)
 	}
 	msg := &api.AssistantMessage{
 		Role:      resp.Role,
@@ -263,14 +270,49 @@ func main() {
 					Content: scanner.Text(),
 				}
 				chatRequest.Messages = append(chatRequest.Messages, msg)
-				_, err = db.CommitMessage(conversationID, msg.Role, msg.Content)
+				lastID, err := db.CommitMessage(conversationID, msg.Role, msg.Content)
 				if err != nil {
 					panic(err)
 				}
-				err = executeAgent(chatRequest, conversationID)
-				if err != nil {
-					log.Fatalf("agent error: %v\n", err)
+				maxRetries := 3
+				var loopErr error
+			OuterLoop:
+				for n := range maxRetries + 1 {
+					loopErr = executeAgent(chatRequest, conversationID)
+					if loopErr != nil {
+						var networkErr *api.NetworkError
+						var httpErr *api.HTTPError
+						var parseErr *api.ParseError
+						var unmarshalErr *api.UnmarshalError
+						switch {
+						case errors.As(loopErr, &networkErr):
+							if !networkErr.Retryable {
+								break OuterLoop
+							}
+						case errors.As(loopErr, &httpErr):
+							if !httpErr.Retryable {
+								break OuterLoop
+							}
+						case errors.As(loopErr, &parseErr):
+							break OuterLoop
+						case errors.As(loopErr, &unmarshalErr):
+							break OuterLoop
+						default:
+							break OuterLoop
+						}
+						time.Sleep(time.Duration(math.Exp2(float64(n))) * time.Second)
+						continue
+					}
 					break
+				}
+				status := "success"
+				if loopErr != nil {
+					status = "failed"
+				} else {
+				}
+				err = db.UpdateMessageStatus(lastID, status)
+				if err != nil {
+					// TODO
 				}
 			}
 			return

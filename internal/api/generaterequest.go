@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -33,30 +35,49 @@ func NewGenerateRequest(msg string, opts ...ConfigOption) *GenerateRequest {
 func (g *GenerateRequest) Post() error {
 	b, err := json.Marshal(g)
 	if err != nil {
-		return err
+		return fmt.Errorf("POST: %w", errors.Join(ErrMarshal, err))
 	}
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, API+"/generate", bytes.NewReader(b))
 	if err != nil {
-		return err
+		return fmt.Errorf("POST: http.NewRequestWithContext: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return &NetworkError{
+			Op:        "client.Do",
+			Retryable: isRetryable(err),
+			Err:       err,
+		}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
-		return fmt.Errorf("Bad request, status code %d\n", resp.StatusCode)
+		return &HTTPError{
+			Op:         "POST",
+			StatusCode: resp.StatusCode,
+			Retryable:  resp.StatusCode >= 500,
+		}
 	}
-	scanner := bufio.NewScanner(resp.Body)
+	return g.ParseStream(resp.Body)
+}
+
+func (g *GenerateRequest) ParseStream(body io.ReadCloser) error {
+	scanner := bufio.NewScanner(body)
 	var modelResponse BaseModelResponse
 	for scanner.Scan() {
 		if err := json.Unmarshal(scanner.Bytes(), &modelResponse); err != nil {
 			log.Printf("Failed to unmarshal response: %v", err)
-			continue
+			return fmt.Errorf("ParseStream: %w", err)
 		}
 		os.Stdout.WriteString(modelResponse.Response)
 	}
-	return scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return &ParseError{
+			Op:        "scanner.Err",
+			Retryable: false,
+			Err:       err,
+		}
+	}
+	return nil
 }

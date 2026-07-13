@@ -5,8 +5,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -16,7 +17,7 @@ import (
 
 func NewChatRequest(opts ...ConfigOption) *ChatRequest {
 	chatRequest := &ChatRequest{
-		Messages: []OllamaMessage{
+		Messages: []ServerMessage{
 			&SystemMessage{
 				Role:    "system",
 				Content: "You are a helpful assistant with access to tools. When a user asks you to perform a task that matches an available tool, you must call that tool by providing the tool name and parameters in the specified format.",
@@ -51,34 +52,42 @@ func NewChatRequest(opts ...ConfigOption) *ChatRequest {
 }
 
 func (c *ChatRequest) Post() (*PostResponse, error) {
-	//	fmt.Println()
-	//	fmt.Printf("c=%#v\n", c)
-	//	fmt.Println()
 	b, err := json.Marshal(c)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("POST: %w", errors.Join(ErrMarshal, err))
 	}
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, API+"/chat", bytes.NewReader(b))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("POST: http.NewRequestWithContext: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, &NetworkError{
+			Op:        "client.Do",
+			Retryable: isRetryable(err),
+			Err:       err,
+		}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("Bad request, status code %d\n", resp.StatusCode)
+		return nil, &HTTPError{
+			Op:         "POST",
+			StatusCode: resp.StatusCode,
+			Retryable:  resp.StatusCode >= 500,
+		}
 	}
-	scanner := bufio.NewScanner(resp.Body)
+	return c.ParseStream(resp.Body)
+}
+
+func (c *ChatRequest) ParseStream(body io.ReadCloser) (*PostResponse, error) {
+	scanner := bufio.NewScanner(body)
 	var builder strings.Builder
 	var allToolCalls []ToolCall
 	for scanner.Scan() {
 		modelResponse := &BaseModelResponse{}
 		if err := modelResponse.UnmarshalJSON(scanner.Bytes()); err != nil {
-			log.Printf("Failed to unmarshal response: %v", err)
-			continue
+			return nil, fmt.Errorf("ParseStream: %w", err)
 		}
 
 		if assistantMsg, ok := modelResponse.Message.(*AssistantMessage); ok {
@@ -100,5 +109,17 @@ func (c *ChatRequest) Post() (*PostResponse, error) {
 			}, nil
 		}
 	}
-	return nil, scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return nil, &ParseError{
+			Op:        "scanner.Err",
+			Retryable: false,
+			Err:       err,
+		}
+	}
+
+	return nil, &ParseError{
+		Op:        "ParseStream",
+		Retryable: true,
+		Err:       ErrParse,
+	}
 }

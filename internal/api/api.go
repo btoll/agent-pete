@@ -54,7 +54,7 @@ type RequestOptions struct {
 
 type ChatRequest struct {
 	Request
-	Messages []OllamaMessage `json:"messages"`
+	Messages []ServerMessage `json:"messages"`
 }
 
 type GenerateRequest struct {
@@ -66,13 +66,13 @@ type GenerateRequest struct {
 type PostResponse struct {
 	Role    string
 	Content string
-	Message OllamaMessage
+	Message ServerMessage
 }
 
 type BaseModelResponse struct {
 	Model              string        `json:"model"`
 	CreatedAt          string        `json:"created_at"`
-	Message            OllamaMessage `json:"message"`
+	Message            ServerMessage `json:"message"`
 	Response           string        `json:"response"`
 	Thinking           string        `json:"thinking"`
 	Done               bool          `json:"done"`
@@ -94,48 +94,80 @@ func (b *BaseModelResponse) UnmarshalJSON(data []byte) error {
 		Alias: (*Alias)(b),
 	}
 	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
+		return &UnmarshalError{
+			Op:   "BaseModelResponse.UnmarshalJSON",
+			Type: getType(aux),
+			Err:  err,
+		}
 	}
 	var msgMap map[string]any
 	if err := json.Unmarshal(aux.RawMessage, &msgMap); err != nil {
-		return err
+		return &UnmarshalError{
+			Op:   "BaseModelResponse.UnmarshalJSON",
+			Type: getType(msgMap),
+			Err:  err,
+		}
 	}
 	role, ok := msgMap["role"].(string)
 	if !ok {
-		return fmt.Errorf("no role field in message")
+		return &ParseError{
+			Op:        "BaseModelResponse.UnmarshalJSON",
+			Retryable: false,
+			Err:       fmt.Errorf("no `role` field in message: %s", role),
+		}
 	}
 	switch role {
 	case "system":
 		sm := &SystemMessage{}
 		if err := json.Unmarshal(aux.RawMessage, sm); err != nil {
-			return err
+			return &UnmarshalError{
+				Op:   "BaseModelResponse.UnmarshalJSON",
+				Type: getType(sm),
+				Err:  err,
+			}
 		}
 		b.Message = sm
 	case "user":
 		um := &UserMessage{}
 		if err := json.Unmarshal(aux.RawMessage, um); err != nil {
-			return err
+			return &UnmarshalError{
+				Op:   "BaseModelResponse.UnmarshalJSON",
+				Type: getType(um),
+				Err:  err,
+			}
 		}
 		b.Message = um
 	case "assistant":
 		am := &AssistantMessage{}
 		if err := json.Unmarshal(aux.RawMessage, am); err != nil {
-			return err
+			return &UnmarshalError{
+				Op:   "BaseModelResponse.UnmarshalJSON",
+				Type: getType(am),
+				Err:  err,
+			}
 		}
 		b.Message = am
 	case "tool":
 		tm := &ToolMessage{}
 		if err := json.Unmarshal(aux.RawMessage, tm); err != nil {
-			return err
+			return &UnmarshalError{
+				Op:   "BaseModelResponse.UnmarshalJSON",
+				Type: getType(tm),
+				Err:  err,
+			}
 		}
 		b.Message = tm
 	default:
-		return fmt.Errorf("unknown role: %s", role)
+		return &ParseError{
+			Op:        "BaseModelResponse.UnmarshalJSON",
+			Retryable: false,
+			Err:       fmt.Errorf("unknown role: %s", role),
+		}
 	}
 	return nil
 }
 
-type OllamaMessage interface {
+type ServerMessage interface {
 	GetContent() string
 	GetRole() string
 }

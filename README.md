@@ -2,7 +2,7 @@
 
 This is a learning project.  I am using the [Ollama project] to build an AI Agent.
 
-Currenty, `agent-pete` supports the [`generate`](https://docs.ollama.com/api/generate) and [`chat`](https://docs.ollama.com/api/chat) REST APIs.  `agent-pete` supports both streaming (the default) and non-streaming.
+Currenty, `agent-pete` supports the [`generate`](https://docs.ollama.com/api/generate) and [`chat`](https://docs.ollama.com/api/chat) REST APIs.  `agent-pete` supports both streaming (the default) and non-streaming.  Retries and exponential backoff is supported.
 
 Tools are fully supported.
 
@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS messages (
     conversation_id INTEGER NOT NULL,
     role TEXT NOT NULL,
     content TEXT,
+    status TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(conversation_id) REFERENCES conversations(id)
 );
