@@ -3,6 +3,8 @@ package tool
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 type Tool struct {
@@ -17,9 +19,10 @@ type ToolFunction struct {
 }
 
 type ParameterSchema struct {
-	Type       string
-	Properties map[string]any
-	Required   []string
+	Type                 string
+	Properties           map[string]any
+	Required             []string
+	AdditionalProperties bool
 }
 
 var Tools = map[string]Tool{
@@ -40,7 +43,8 @@ var Tools = map[string]Tool{
 						"description": "The right operand",
 					},
 				},
-				Required: []string{"a", "b"},
+				Required:             []string{"a", "b"},
+				AdditionalProperties: false,
 			},
 		},
 	},
@@ -57,7 +61,8 @@ var Tools = map[string]Tool{
 						"description": "The file to read",
 					},
 				},
-				Required: []string{"filename"},
+				Required:             []string{"filename"},
+				AdditionalProperties: false,
 			},
 		},
 	},
@@ -65,7 +70,7 @@ var Tools = map[string]Tool{
 		Type: "function",
 		Function: ToolFunction{
 			Name:        "WriteFile",
-			Description: "Writes data to a file",
+			Description: "Writes data to a file. Will create the file if it doesn't exist.",
 			Parameters: ParameterSchema{
 				Type: "object",
 				Properties: map[string]any{
@@ -78,7 +83,8 @@ var Tools = map[string]Tool{
 						"description": "The data to write to the file",
 					},
 				},
-				Required: []string{"filename"},
+				Required:             []string{"filename", "data"},
+				AdditionalProperties: false,
 			},
 		},
 	},
@@ -89,7 +95,13 @@ func Add[T int | float64](a, b T) T {
 }
 
 func ReadFile(filename string) (string, error) {
-	b, err := os.ReadFile(filename)
+	dir, file := filepath.Split(filename)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	dirs := filepath.Join(cwd, dir)
+	b, err := os.ReadFile(filepath.Join(dirs, file))
 	if err != nil {
 		return "", err
 	}
@@ -97,9 +109,19 @@ func ReadFile(filename string) (string, error) {
 }
 
 func WriteFile(filename string, data string) (string, error) {
-	err := os.WriteFile(fmt.Sprintf("/home/btoll/agent-pete/%s", filename), []byte(data), 0644)
+	dir, file := filepath.Split(filename)
+	cwd, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
-	return "", nil
+	dirs := filepath.Join(cwd, dir)
+	err = os.MkdirAll(dirs, 0755)
+	if err != nil {
+		return "", err
+	}
+	err = os.WriteFile(filepath.Join(dirs, file), []byte(strings.ReplaceAll(data, "\\n", "\n")), 0644)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("created filename `%s`", file), nil
 }

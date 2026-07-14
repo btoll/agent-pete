@@ -20,7 +20,7 @@ func NewChatRequest(opts ...ConfigOption) *ChatRequest {
 		Messages: []ServerMessage{
 			&SystemMessage{
 				Role:    "system",
-				Content: "You are a helpful assistant with access to tools. When a user asks you to perform a task that matches an available tool, you must call that tool by providing the tool name and parameters in the specified format.",
+				Content: "You are an agentic coding assistant with access to tools: ReadFile, WriteFile, and Add.\n\nCRITICAL: You must call tools to complete tasks. Do not narrate or describe what you would do — actually call the tools.\n\nWhen asked to run a skill:\n1. Call ReadFile with the skill definition file path (e.g., \"skills/problem-checker/SKILL.md\")\n2. Read and parse the exact content returned from that tool call\n3. Execute the steps described in the skill file using ReadFile and WriteFile\n4. Do not assume or hallucinate file contents — only use what tool calls return\n5. STOP after completing the requested skill. Do not read or execute any other skills unless explicitly asked.\n\nAvailable skills:\n - skills/problem-checker/SKILL.md: Evaluates problem.txt against 4 guidelines and writes results to problem_checker_results.md\n - skills/test-generation/SKILL.md: Generates a test suite in da_training_project_tests/ based on problem.txt with 2-3 intentional misalignments",
 			},
 		},
 		Request: Request{

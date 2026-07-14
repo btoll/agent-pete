@@ -207,6 +207,8 @@ func processToolCalls(chatRequest *api.ChatRequest, toolCalls []api.ToolCall, la
 			ToolCallID: toolCall.ID,
 			Content:    content,
 		})
+		fmt.Printf("toolCall.Function.Name=%#v\n", toolCall.Function.Name)
+		fmt.Printf("toolCall.Function.Arguments=%#v\n", toolCall.Function.Arguments)
 		b, err := json.Marshal(toolCall.Function.Arguments)
 		if err != nil {
 			return err
