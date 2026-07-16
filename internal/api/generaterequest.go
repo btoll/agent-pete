@@ -9,13 +9,15 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 )
 
-func NewGenerateRequest(msg string, opts ...ConfigOption) *GenerateRequest {
+func NewGenerateRequest(msg string, logger *slog.Logger, opts ...ConfigOption) *GenerateRequest {
 	generateRequest := &GenerateRequest{
 		Prompt: msg,
+		Logger: logger,
 		Request: Request{
 			Model:  "mistral",
 			Stream: true,

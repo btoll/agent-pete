@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"math"
 	"os"
 	"strings"
@@ -23,11 +24,15 @@ var (
 	currentMsg          string
 	model               string
 	createDatabase      bool
+	debug               bool
 	oneOff              bool
 	repl                bool
 	stream              bool
 	totalResponseTokens int
 	tools               ToolNames
+
+	logger   *slog.Logger
+	logLevel *slog.LevelVar = new(slog.LevelVar)
 )
 
 type ToolNames []string
@@ -180,17 +185,20 @@ func processResponse(chatRequest *api.ChatRequest, conversationID int) ([]api.To
 	if err != nil {
 		return nil, -1, fmt.Errorf("processResponse: %w", err)
 	}
-	msg := &api.AssistantMessage{
+	assistantMsg := &api.AssistantMessage{
 		Role:      resp.Role,
 		Content:   resp.Content,
 		ToolCalls: resp.Message.(*api.AssistantMessage).ToolCalls,
 	}
-	chatRequest.Messages = append(chatRequest.Messages, msg)
-	lastID, err := db.CommitMessage(conversationID, msg.Role, msg.Content)
+	chatRequest.Logger.Debug("processResponse",
+		slog.Any("AssistantMessage", assistantMsg),
+	)
+	chatRequest.Messages = append(chatRequest.Messages, assistantMsg)
+	lastID, err := db.CommitMessage(conversationID, assistantMsg.Role, assistantMsg.Content)
 	if err != nil {
 		return nil, -1, err
 	}
-	return msg.ToolCalls, lastID, nil
+	return assistantMsg.ToolCalls, lastID, nil
 }
 
 func processToolCalls(chatRequest *api.ChatRequest, toolCalls []api.ToolCall, lastID int) error {
@@ -207,8 +215,12 @@ func processToolCalls(chatRequest *api.ChatRequest, toolCalls []api.ToolCall, la
 			ToolCallID: toolCall.ID,
 			Content:    content,
 		})
-		fmt.Printf("toolCall.Function.Name=%#v\n", toolCall.Function.Name)
-		fmt.Printf("toolCall.Function.Arguments=%#v\n", toolCall.Function.Arguments)
+		chatRequest.Logger.Debug("processToolCalls",
+			slog.Group("tool",
+				slog.String("name", toolCall.Function.Name),
+				slog.Any("arguments", toolCall.Function.Arguments),
+			),
+		)
 		b, err := json.Marshal(toolCall.Function.Arguments)
 		if err != nil {
 			return err
@@ -232,6 +244,7 @@ func main() {
 	flag.StringVar(&currentMsg, "m", "", "The newest message to append to the prompt.")
 	flag.StringVar(&model, "model", "mistral", "The model.")
 	flag.BoolVar(&createDatabase, "create-database", false, "Create the database.  Useful for debugging.")
+	flag.BoolVar(&debug, "debug", false, "Turn on verbose logging.")
 	flag.BoolVar(&oneOff, "one-off", false, "Don't include previous messages in the prompt (/generate).")
 	flag.BoolVar(&repl, "repl", false, "Communicate with the model in a REPL interface.")
 	flag.BoolVar(&stream, "stream", true, "True to use the streaming API (/chat).")
@@ -245,16 +258,27 @@ func main() {
 		return
 	}
 
+	logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: logLevel,
+	}))
+	if debug {
+		logLevel.Set(slog.LevelDebug)
+	}
+	slog.SetDefault(logger)
+
 	if isZeroValue(oneOff) || len(tools) > 0 {
 		conversationID, err := db.GetConversationID(convName)
 		if err != nil {
 			log.Panicf("let's panic here %v\n", err)
 		}
 
-		chatRequest := api.NewChatRequest(getConfigOptions()...)
-		if len(tools) > 0 {
-			chatRequest.Stream = false
-		}
+		chatRequest := api.NewChatRequest(
+			logger.WithGroup("api").With(slog.String("type", "ChatRequest")),
+			getConfigOptions()...,
+		)
+		//		if len(tools) > 0 {
+		//			chatRequest.Stream = false
+		//		}
 		getPreviousMessages(chatRequest, conversationID)
 		if repl {
 			scanner := bufio.NewScanner(os.Stdin)
@@ -335,7 +359,11 @@ func main() {
 		return
 	}
 
-	generateRequest := api.NewGenerateRequest(currentMsg, getConfigOptions()...)
+	generateRequest := api.NewGenerateRequest(
+		currentMsg,
+		logger.WithGroup("api").With(slog.String("type", "GenerateRequest")),
+		getConfigOptions()...,
+	)
 	err := generateRequest.Post()
 	if err != nil {
 		panic(err)

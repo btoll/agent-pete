@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"time"
@@ -53,14 +54,16 @@ type RequestOptions struct {
 }
 
 type ChatRequest struct {
+	Logger *slog.Logger
 	Request
 	Messages []ServerMessage `json:"messages"`
 }
 
 type GenerateRequest struct {
-	Request
 	Prompt string `json:"prompt"`
-	Think  bool   `json:"think"`
+	Logger *slog.Logger
+	Request
+	Think bool `json:"think"`
 }
 
 type PostResponse struct {
