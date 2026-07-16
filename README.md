@@ -169,6 +169,7 @@ This is the last chunk sent by the server (because `"done": true`).  Note that i
 
 - [Ollama project]
 - [Ollama API Docs](https://docs.ollama.com/api/introduction)
+- [Agent Skills](https://agentskills.io/)
 - [Go `database/sql` package docs](https://pkg.go.dev/database/sql)
 
 ## License

@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -13,9 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/btoll/agent-pete/internal/agent"
 	"github.com/btoll/agent-pete/internal/api"
 	"github.com/btoll/agent-pete/internal/db"
-	"github.com/btoll/agent-pete/internal/tool"
 	_ "modernc.org/sqlite"
 )
 
@@ -46,80 +45,6 @@ func (t *ToolNames) String() string {
 	return strings.Join(*t, ",")
 }
 
-func callTool(toolCall api.ToolCall) (string, error) {
-	funcName := toolCall.Function.Name
-	if t, found := tool.Tools[funcName]; found {
-		switch t.Function.Name {
-		case "Add":
-			a, found := toolCall.Function.Arguments["a"].(float64)
-			if !found {
-				return "", errors.New("argument `a` not found")
-			}
-			b, found := toolCall.Function.Arguments["b"].(float64)
-			if !found {
-				return "", errors.New("argument `b` not found")
-			}
-			return fmt.Sprintf("%v", tool.Add(a, b)), nil
-		case "ReadFile":
-			if filename, found := toolCall.Function.Arguments["filename"]; found {
-				return tool.ReadFile(filename.(string))
-			}
-			return "", errors.New("argument `filename` not found")
-		case "WriteFile":
-			filename, found := toolCall.Function.Arguments["filename"]
-			if !found {
-				return "", errors.New("argument `filename` not found")
-			}
-			data, found := toolCall.Function.Arguments["data"]
-			if !found {
-				return "", errors.New("argument `data` not found")
-			}
-			return tool.WriteFile(filename.(string), data.(string))
-		}
-	}
-	return "", fmt.Errorf("tool `%s` not found", funcName)
-}
-
-func convertTools(toolMessages []db.ToolMessage) []api.ToolCall {
-	tc := make([]api.ToolCall, len(toolMessages))
-	for i, toolMessage := range toolMessages {
-		var m map[string]any
-		_ = json.Unmarshal([]byte(toolMessage.Parameters), &m)
-		tc[i] = api.ToolCall{
-			ID: toolMessage.ID,
-			Function: api.ToolCallFunction{
-				Name:      toolMessage.Name,
-				Arguments: m,
-			},
-		}
-	}
-	return tc
-}
-
-func executeAgent(chatRequest *api.ChatRequest, conversationID int) error {
-	for {
-		toolCalls, lastID, err := processResponse(chatRequest, conversationID)
-		if err != nil {
-			return &api.InferenceError{
-				Backend: "ollama",
-				Model:   chatRequest.Model,
-				Op:      "processResponse",
-				Err:     err,
-			}
-		}
-
-		if len(toolCalls) == 0 {
-			break
-		}
-
-		err = processToolCalls(chatRequest, toolCalls, lastID)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func getConfigOptions() []api.ConfigOption {
 	var configOptions []api.ConfigOption
 	if !isZeroValue(model) {
@@ -143,103 +68,18 @@ func getConfigOptions() []api.ConfigOption {
 	return configOptions
 }
 
-func getPreviousMessages(chatRequest *api.ChatRequest, conversationID int) {
-	recentMessages, err := db.GetNRecentMessages(conversationID, 30)
-	if err != nil {
-		panic(err)
-	}
-	for _, recentMessage := range recentMessages {
-		if recentMessage.Role == "assistant" {
-			m, err := db.GetToolCallsById(recentMessage.ID)
-			if err != nil {
-				panic(err)
-			}
-			recentMessage.Tools = m
-		}
-	}
-	for _, msg := range recentMessages {
-		chatRequest.Messages = append(chatRequest.Messages, api.AssistantMessage{
-			Role:      msg.Role,
-			Content:   msg.Content,
-			ToolCalls: convertTools(msg.Tools),
-		})
-		if len(msg.Tools) > 0 {
-			for _, tool := range msg.Tools {
-				chatRequest.Messages = append(chatRequest.Messages, api.ToolMessage{
-					Role:       "tool",
-					Content:    tool.Result,
-					ToolCallID: tool.ID,
-				})
-			}
-		}
-	}
-}
-
 func isZeroValue[T comparable](v T) bool {
 	var zero T
 	return zero == v
 }
 
-func processResponse(chatRequest *api.ChatRequest, conversationID int) ([]api.ToolCall, int, error) {
-	resp, err := chatRequest.Post()
-	if err != nil {
-		return nil, -1, fmt.Errorf("processResponse: %w", err)
-	}
-	assistantMsg := &api.AssistantMessage{
-		Role:      resp.Role,
-		Content:   resp.Content,
-		ToolCalls: resp.Message.(*api.AssistantMessage).ToolCalls,
-	}
-	chatRequest.Logger.Debug("processResponse",
-		slog.Any("AssistantMessage", assistantMsg),
-	)
-	chatRequest.Messages = append(chatRequest.Messages, assistantMsg)
-	lastID, err := db.CommitMessage(conversationID, assistantMsg.Role, assistantMsg.Content)
-	if err != nil {
-		return nil, -1, err
-	}
-	return assistantMsg.ToolCalls, lastID, nil
-}
-
-func processToolCalls(chatRequest *api.ChatRequest, toolCalls []api.ToolCall, lastID int) error {
-	for _, toolCall := range toolCalls {
-		var content string
-		res, err := callTool(toolCall)
-		if err != nil {
-			content = err.Error()
-		} else {
-			content = res
-		}
-		chatRequest.Messages = append(chatRequest.Messages, &api.ToolMessage{
-			Role:       "tool",
-			ToolCallID: toolCall.ID,
-			Content:    content,
-		})
-		chatRequest.Logger.Debug("processToolCalls",
-			slog.Group("tool",
-				slog.String("name", toolCall.Function.Name),
-				slog.Any("arguments", toolCall.Function.Arguments),
-			),
-		)
-		b, err := json.Marshal(toolCall.Function.Arguments)
-		if err != nil {
-			return err
-		}
-		err = db.CommitToolCall(lastID, toolCall.ID, toolCall.Function.Name, string(b), res)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func main() {
 	// TODO: I don't like the responsibility of closing the db to be here.
-	defer func() {
-		if err := db.CloseDatabase(); err != nil {
-			log.Fatalf("error closing database: %v\n", err)
-		}
-	}()
+	//	defer func() {
+	//		if err := db.CloseDatabase(); err != nil {
+	//			log.Fatalf("error closing database: %v\n", err)
+	//		}
+	//	}()
 
 	flag.StringVar(&currentMsg, "m", "", "The newest message to append to the prompt.")
 	flag.StringVar(&model, "model", "mistral", "The model.")
@@ -258,6 +98,8 @@ func main() {
 		return
 	}
 
+	agent := agent.New()
+
 	logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: logLevel,
 	}))
@@ -267,7 +109,7 @@ func main() {
 	slog.SetDefault(logger)
 
 	if isZeroValue(oneOff) || len(tools) > 0 {
-		conversationID, err := db.GetConversationID(convName)
+		conversationID, err := agent.GetConversationID(convName)
 		if err != nil {
 			log.Panicf("let's panic here %v\n", err)
 		}
@@ -279,7 +121,7 @@ func main() {
 		//		if len(tools) > 0 {
 		//			chatRequest.Stream = false
 		//		}
-		getPreviousMessages(chatRequest, conversationID)
+		agent.GetPreviousMessages(chatRequest, conversationID)
 		if repl {
 			scanner := bufio.NewScanner(os.Stdin)
 			for {
@@ -296,7 +138,7 @@ func main() {
 					Content: scanner.Text(),
 				}
 				chatRequest.Messages = append(chatRequest.Messages, msg)
-				lastID, err := db.CommitMessage(conversationID, msg.Role, msg.Content)
+				lastID, err := agent.CommitMessage(conversationID, msg)
 				if err != nil {
 					panic(err)
 				}
@@ -304,7 +146,7 @@ func main() {
 				var loopErr error
 			OuterLoop:
 				for n := range maxRetries + 1 {
-					loopErr = executeAgent(chatRequest, conversationID)
+					loopErr = agent.ExecuteAgent(chatRequest, conversationID)
 					if loopErr != nil {
 						var networkErr *api.NetworkError
 						var httpErr *api.HTTPError
@@ -336,7 +178,7 @@ func main() {
 					status = "failed"
 				} else {
 				}
-				err = db.UpdateMessageStatus(lastID, status)
+				err = agent.UpdateMessageStatus(lastID, status)
 				if err != nil {
 					// TODO
 				}
@@ -351,11 +193,11 @@ func main() {
 			Content: currentMsg,
 		}
 		chatRequest.Messages = append(chatRequest.Messages, msg)
-		_, err = db.CommitMessage(conversationID, msg.Role, msg.Content)
+		_, err = agent.CommitMessage(conversationID, msg)
 		if err != nil {
 			panic(err)
 		}
-		executeAgent(chatRequest, conversationID)
+		agent.ExecuteAgent(chatRequest, conversationID)
 		return
 	}
 

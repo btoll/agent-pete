@@ -55,6 +55,7 @@ func NewChatRequest(logger *slog.Logger, opts ...ConfigOption) *ChatRequest {
 }
 
 func (c *ChatRequest) Post() (*PostResponse, error) {
+	fmt.Printf("c=%#v\n", c)
 	b, err := json.Marshal(c)
 	if err != nil {
 		return nil, fmt.Errorf("POST: %w", errors.Join(ErrMarshal, err))

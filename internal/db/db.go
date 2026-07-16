@@ -10,6 +10,10 @@ import (
 
 var db *sql.DB
 
+type DB struct {
+	conn *sql.DB
+}
+
 type ToolMessage struct {
 	ID         string
 	Name       string
@@ -25,7 +29,21 @@ type Message struct {
 	Tools          []ToolMessage
 }
 
-func init() {
+func New() *DB {
+	return &DB{
+		conn: OpenDatabase(),
+	}
+}
+
+//func CloseDatabase() error {
+//	db = GetDatabase()
+//	if db != nil {
+//		return db.Close()
+//	}
+//	return nil
+//}
+
+func OpenDatabase() *sql.DB {
 	var err error
 	db, err = sql.Open("sqlite", "messages.db")
 	if err != nil {
@@ -33,19 +51,11 @@ func init() {
 	}
 	db.SetMaxOpenConns(15)
 	db.SetMaxIdleConns(5)
+	return db
 }
 
-func CloseDatabase() error {
-	db = GetDatabase()
-	if db != nil {
-		return db.Close()
-	}
-	return nil
-}
-
-func CommitMessage(conversationID int, role, content string) (int, error) {
-	db = GetDatabase()
-	stmt, err := db.Prepare("INSERT INTO messages (conversation_id, role, content, status) VALUES (?, ?, ?, ?)")
+func (d *DB) CommitMessage(conversationID int, role, content string) (int, error) {
+	stmt, err := d.conn.Prepare("INSERT INTO messages (conversation_id, role, content, status) VALUES (?, ?, ?, ?)")
 	if err != nil {
 		return -1, err
 	}
@@ -65,9 +75,8 @@ func CommitMessage(conversationID int, role, content string) (int, error) {
 	return int(i64), nil
 }
 
-func CommitToolCall(lastID int, toolCallID, funcName, arguments, res string) error {
-	db = GetDatabase()
-	stmt, err := db.Prepare("INSERT INTO tool_calls (message_id, tool_call_id, tool_name, parameters, result) VALUES (?, ?, ?, ?, ?)")
+func (d *DB) CommitToolCall(lastID int, toolCallID, funcName, arguments, res string) error {
+	stmt, err := d.conn.Prepare("INSERT INTO tool_calls (message_id, tool_call_id, tool_name, parameters, result) VALUES (?, ?, ?, ?, ?)")
 	if err != nil {
 		return err
 	}
@@ -77,7 +86,7 @@ func CommitToolCall(lastID int, toolCallID, funcName, arguments, res string) err
 }
 
 func CreateDatabase() error {
-	db = GetDatabase()
+	db, _ := sql.Open("sqlite", "messages.db")
 	createTableSQL := `
 	CREATE TABLE IF NOT EXISTS messages (
 		id INTEGER PRIMARY KEY,
@@ -114,9 +123,8 @@ func CreateDatabase() error {
 	return err
 }
 
-func GetConversationID(name string) (int, error) {
-	db = GetDatabase()
-	stmt, err := db.Prepare("SELECT id FROM conversations WHERE name = ?")
+func (d *DB) GetConversationID(name string) (int, error) {
+	stmt, err := d.conn.Prepare("SELECT id FROM conversations WHERE name = ?")
 	if err != nil {
 		return -1, err
 	}
@@ -145,13 +153,8 @@ func GetConversationID(name string) (int, error) {
 	return id, err
 }
 
-func GetDatabase() *sql.DB {
-	return db
-}
-
-func GetNRecentMessages(conversationID int, limit int) ([]*Message, error) {
-	db = GetDatabase()
-	stmt, err := db.Prepare("SELECT id, role, content FROM messages WHERE conversation_id = ? AND status = 'success' ORDER BY id DESC LIMIT ?")
+func (d *DB) GetNRecentMessages(conversationID int, limit int) ([]*Message, error) {
+	stmt, err := d.conn.Prepare("SELECT id, role, content FROM messages WHERE conversation_id = ? AND status = 'success' ORDER BY id DESC LIMIT ?")
 	if err != nil {
 		return nil, err
 	}
@@ -174,9 +177,8 @@ func GetNRecentMessages(conversationID int, limit int) ([]*Message, error) {
 	return m, nil
 }
 
-func GetToolCallsById(messageID int) ([]ToolMessage, error) {
-	db = GetDatabase()
-	stmt, err := db.Prepare("SELECT tool_call_id, tool_name, parameters, result FROM tool_calls WHERE message_id = ? ORDER BY id")
+func (d *DB) GetToolCallsById(messageID int) ([]ToolMessage, error) {
+	stmt, err := d.conn.Prepare("SELECT tool_call_id, tool_name, parameters, result FROM tool_calls WHERE message_id = ? ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -198,9 +200,8 @@ func GetToolCallsById(messageID int) ([]ToolMessage, error) {
 	return m, nil
 }
 
-func UpdateMessageStatus(rowID int, status string) error {
-	db = GetDatabase()
-	stmt, err := db.Prepare("UPDATE messages SET status = ? WHERE id = ?")
+func (d *DB) UpdateMessageStatus(rowID int, status string) error {
+	stmt, err := d.conn.Prepare("UPDATE messages SET status = ? WHERE id = ?")
 	if err != nil {
 		return err
 	}

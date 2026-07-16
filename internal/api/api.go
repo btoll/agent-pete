@@ -11,11 +11,6 @@ import (
 	"github.com/btoll/agent-pete/internal/tool"
 )
 
-// Compile-time assertion, ensure that *biplane implements gamepiece without constructing
-// a value (no allocation).  Checks method-set compatibililty for *biplane.
-// var _ Interface = (*T)(nil)
-//var _ gamepiece = (*biplane)(nil)
-
 var (
 	API = "http://localhost:11434/api"
 
@@ -169,6 +164,14 @@ func (b *BaseModelResponse) UnmarshalJSON(data []byte) error {
 	}
 	return nil
 }
+
+// Compile-time assertion, ensure that *ChatRequest implements gamepiece without constructing
+// a value (no allocation).  Checks method-set compatibililty for *ChatRequest.
+// var _ Interface = (*T)(nil)
+var _ ServerMessage = (*SystemMessage)(nil)
+var _ ServerMessage = (*UserMessage)(nil)
+var _ ServerMessage = (*AssistantMessage)(nil)
+var _ ServerMessage = (*ToolMessage)(nil)
 
 type ServerMessage interface {
 	GetContent() string
