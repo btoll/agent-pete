@@ -2,11 +2,11 @@
 
 This is a learning project.  I am using the [Ollama project] to build an AI Agent.
 
-Currenty, `agent-pete` supports the [`generate`](https://docs.ollama.com/api/generate) and [`chat`](https://docs.ollama.com/api/chat) REST APIs.  `agent-pete` supports both streaming (the default) and non-streaming.  Retries and exponential backoff is supported.
+Currenty, `agent-pete` supports the [`chat`](https://docs.ollama.com/api/chat) REST API.  `agent-pete` supports both streaming (the default) and non-streaming.  Retries and exponential backoff is supported.
 
 Tools are fully supported.
 
-There is a limited number CLI options that are supported.  The default is to hit the `chat` endpoint unless `--one-off` is passed as a flag, at which point `agent-pete` will call the `generate` endpoint.
+There is a limited number CLI options that are supported:
 
 ```bash
 $ ./agent-pete -h
@@ -19,8 +19,6 @@ Usage of ./agent-pete:
         The newest message to append to the prompt.
   -model string
         The model. (default "mistral")
-  -one-off
-        Don't include previous messages in the prompt (/generate).
   -stream
         True to use the streaming API (/chat). (default true)
   -tokens int
@@ -31,11 +29,9 @@ Usage of ./agent-pete:
 
 This will change!  The code will change!  You will change!  Change is inevitable!
 
-## The Difference Between `generate` and `chat`
+## On `chat`
 
-The `generate` API does not include any previous messages (context) in its prompt when `POST`ed to the Ollama server (model?).  It is a one-off, with the question and the response NOT being persisted.
-
-The `chat` API, on the other hand, will include previous messages in its prompt.  It default to 30, which is low, but the context window for the `mistral` model is quite small.  In addition, it will persist both the question ("role": "user") and the response ("role": "assistant") to a local [SQLite](https://sqlite.org/index.html) database.
+The `chat` API will include previous messages in its prompt.  It default to 30, which is low, but the context window for the `mistral` model is quite small.  In addition, it will persist both the question ("role": "user") and the response ("role": "assistant") to a local [SQLite](https://sqlite.org/index.html) database.
 
 ```bash
 $ ollama list
@@ -179,5 +175,5 @@ This is the last chunk sent by the server (because `"done": true`).  Note that i
 ## Author
 
 [Benjamin Toll](https://benjamintoll.com)
-
 [Ollama project]: https://ollama.com/
+

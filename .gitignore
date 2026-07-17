@@ -1,4 +1,5 @@
 agent-pete
+.agents
 *.[oa]
 *.out
 *~

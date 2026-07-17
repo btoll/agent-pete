@@ -95,13 +95,14 @@ func Add[T int | float64](a, b T) T {
 }
 
 func ReadFile(filename string) (string, error) {
-	dir, file := filepath.Split(filename)
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", err
+	var err error
+	if !filepath.IsAbs(filename) {
+		filename, err = filepath.Abs(filename)
+		if err != nil {
+			return "", err
+		}
 	}
-	dirs := filepath.Join(cwd, dir)
-	b, err := os.ReadFile(filepath.Join(dirs, file))
+	b, err := os.ReadFile(filename)
 	if err != nil {
 		return "", err
 	}
@@ -109,17 +110,19 @@ func ReadFile(filename string) (string, error) {
 }
 
 func WriteFile(filename string, data string) (string, error) {
-	dir, file := filepath.Split(filename)
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", err
+	var err error
+	if !filepath.IsAbs(filename) {
+		filename, err = filepath.Abs(filename)
+		if err != nil {
+			return "", err
+		}
 	}
-	dirs := filepath.Join(cwd, dir)
+	dirs, file := filepath.Split(filename)
 	err = os.MkdirAll(dirs, 0755)
 	if err != nil {
 		return "", err
 	}
-	err = os.WriteFile(filepath.Join(dirs, file), []byte(strings.ReplaceAll(data, "\\n", "\n")), 0644)
+	err = os.WriteFile(filename, []byte(strings.ReplaceAll(data, "\\n", "\n")), 0644)
 	if err != nil {
 		return "", err
 	}

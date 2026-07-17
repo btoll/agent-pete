@@ -31,10 +31,12 @@ var (
 )
 
 type Request struct {
-	Model   string         `json:"model"`
-	Stream  bool           `json:"stream"`
-	Options RequestOptions `json:"options"`
-	Tools   []tool.Tool    `json:"tools"`
+	Model    string          `json:"model"`
+	Stream   bool            `json:"stream"`
+	Options  RequestOptions  `json:"options"`
+	Messages []ServerMessage `json:"messages"`
+	Tools    []tool.Tool     `json:"tools"`
+	Logger   *slog.Logger
 }
 
 type RequestOptions struct {
@@ -46,19 +48,6 @@ type RequestOptions struct {
 	//	Stop        string  `json:"stop"`
 	//	NumCtx      int     `json:"num_ctx"`
 	NumPredict int `json:"num_predict"`
-}
-
-type ChatRequest struct {
-	Logger *slog.Logger
-	Request
-	Messages []ServerMessage `json:"messages"`
-}
-
-type GenerateRequest struct {
-	Prompt string `json:"prompt"`
-	Logger *slog.Logger
-	Request
-	Think bool `json:"think"`
 }
 
 type PostResponse struct {
@@ -165,8 +154,8 @@ func (b *BaseModelResponse) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Compile-time assertion, ensure that *ChatRequest implements gamepiece without constructing
-// a value (no allocation).  Checks method-set compatibililty for *ChatRequest.
+// Compile-time assertion, ensure that *Message implements ServerMessage without constructing
+// a value (no allocation).  Checks method-set compatibililty for *Message.
 // var _ Interface = (*T)(nil)
 var _ ServerMessage = (*SystemMessage)(nil)
 var _ ServerMessage = (*UserMessage)(nil)
