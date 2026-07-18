@@ -3,6 +3,7 @@ package tool
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -44,6 +45,24 @@ var Tools = map[string]Tool{
 					},
 				},
 				Required:             []string{"a", "b"},
+				AdditionalProperties: false,
+			},
+		},
+	},
+	"GetWeather": {
+		Type: "function",
+		Function: ToolFunction{
+			Name:        "GetWeather",
+			Description: "Get the weather for any city,state in the United States.",
+			Parameters: ParameterSchema{
+				Type: "object",
+				Properties: map[string]any{
+					"location": map[string]any{
+						"type":        "string",
+						"description": "The city and state separated by a comma (,).",
+					},
+				},
+				Required:             []string{"location"},
 				AdditionalProperties: false,
 			},
 		},
@@ -92,6 +111,18 @@ var Tools = map[string]Tool{
 
 func Add[T int | float64](a, b T) T {
 	return a + b
+}
+
+func GetWeather(location string) (string, error) {
+	path, err := exec.LookPath("weather")
+	if err != nil {
+		return "", err
+	}
+	out, err := exec.Command(path, location).Output()
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
 }
 
 func ReadFile(filename string) (string, error) {

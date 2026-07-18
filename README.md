@@ -10,11 +10,13 @@ There is a limited number CLI options that are supported:
 
 ```bash
 $ ./agent-pete -h
-Usage of ./agent-pete:
+Usage of /tmp/go-build716687853/b001/exe/agent-pete:
   -conv string
-        Conversation ID for grouping related messages. (default "default")
+        Conversation ID for grouping related messages. (default "repl")
   -create-database
         Create the database.  Useful for debugging.
+  -debug
+        Turn on verbose logging.
   -m string
         The newest message to append to the prompt.
   -model string
@@ -23,8 +25,6 @@ Usage of ./agent-pete:
         True to use the streaming API (/chat). (default true)
   -tokens int
         Total number of response tokens.
-  -tool value
-        The name of a tool (function).  Can accept specified multiple times.  Primarily used for debugging, but it can help limit tokens spent by reducing the request payload.
 ```
 
 This will change!  The code will change!  You will change!  Change is inevitable!
@@ -161,6 +161,10 @@ This is the last chunk sent by the server (because `"done": true`).  Note that i
 //	},
 //}
 
+<!--
+https://github.com/ArneJanning/local-skills-agent
+-->
+
 ## Reference
 
 - [Ollama project]
@@ -175,5 +179,6 @@ This is the last chunk sent by the server (because `"done": true`).  Note that i
 ## Author
 
 [Benjamin Toll](https://benjamintoll.com)
+
 [Ollama project]: https://ollama.com/
 

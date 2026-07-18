@@ -120,6 +120,11 @@ func (a *Agent) CallTool(toolCall api.ToolCall) (string, error) {
 				return "", errors.New("argument `b` not found")
 			}
 			return fmt.Sprintf("%v", tool.Add(a, b)), nil
+		case "GetWeather":
+			if location, found := toolCall.Function.Arguments["location"]; found {
+				return tool.GetWeather(location.(string))
+			}
+			return "", errors.New("argument `location` not found")
 		case "ReadFile":
 			if filename, found := toolCall.Function.Arguments["filename"]; found {
 				return tool.ReadFile(filename.(string))
@@ -166,13 +171,51 @@ func (a *Agent) ConvertTools(toolMessages []db.ToolMessage) []api.ToolCall {
 
 func (a *Agent) GetSystemPrompt() api.SystemMessage {
 	builder := strings.Builder{}
-	builder.WriteString("You are an agentic coding assistant with access to tools: ReadFile, WriteFile, and Add.\n\nCRITICAL: You must call tools to complete tasks. Do not narrate or describe what you would do — actually call the tools.\n\n")
-	b, _ := json.MarshalIndent(a.skills, "", "  ")
-	//	fmt.Printf("b=%#v\n", string(b))
+	builder.WriteString(`
+	You are agent-pete, a coding assistant with access to tools: ReadFile, WriteFile, Add.
+
+	Rules:
+	- Always use tools to complete tasks. Never narrate what you would do.
+	- When asked to run a skill, first ReadFile the skill's Location, then follow its instructions.
+	- Be concise. No unnecessary explanation.
+	`)
+	b, _ := json.Marshal(a.skills)
 	builder.WriteString(string(b))
+	//	builder.WriteString(`
+	//You are an agentic coding assistant with access to tools: ReadFile, WriteFile, and Add.
+	//
+	//CRITICAL: You must call tools to complete tasks. Do not narrate or describe what you would do — actually call the tools.
+	//`)
+	//	b, _ := json.Marshal(a.skills)
+	//	builder.WriteString(string(b))
+	//	builder.WriteString(`
+	//# How to Use Skills
+	//
+	//**IMPORTANT: Automatic Skill Discovery**
+	//When a user asks you to do something, FIRST check if any available skill matches their request. Then use that skill WITHOUT being explicitly told.
+	//
+	//**To use a skill:**
+	//1. Read the skill file from .skills/ using read_file (e.g., .skills/code_quality_analyzer.md)
+	//2. Follow the instructions in that skill file
+	//3. The skill may reference supporting files (scripts, benchmarks, templates) - read those as needed
+	//4. Skills can invoke other skills (composability)
+	//
+	//**Examples:**
+	//- User: "Analyze this code" → Automatically use code_quality_analyzer skill
+	//- User: "Document this project" → Automatically use technical_documentation_generator skill
+	//- User: "Make a hello world" → Automatically use write_hello_world skill
+	//
+	//**Key Principles:**
+	//- Match user intent to skills automatically
+	//- Always read the skill file first to get detailed instructions
+	//- Skills contain step-by-step guidance - follow them precisely
+	//- Skills may have supporting resources (scripts/, benchmarks/, templates/) - use them
+	//- Never make up analysis - use the skill's methods and data
+	//
+	//When you're done with a task, provide a clear response. Always be helpful and precise.
+	//`)
 	return api.SystemMessage{
-		Role: "system",
-		//				Content: "You are an agentic coding assistant with access to tools: ReadFile, WriteFile, and Add.\n\nCRITICAL: You must call tools to complete tasks. Do not narrate or describe what you would do — actually call the tools.\n\nWhen asked to run a skill:\n1. Call ReadFile with the skill definition file path (e.g., \"skills/problem-checker/SKILL.md\")\n2. Read and parse the exact content returned from that tool call\n3. Execute the steps described in the skill file using ReadFile and WriteFile\n4. Do not assume or hallucinate file contents — only use what tool calls return\n5. STOP after completing the requested skill. Do not read or execute any other skills unless explicitly asked.\n\nAvailable skills:\n - skills/problem-checker/SKILL.md: Evaluates problem.txt against 4 guidelines and writes results to problem_checker_results.md\n - skills/test-generation/SKILL.md: Generates a test suite in da_training_project_tests/ based on problem.txt with 2-3 intentional misalignments",
+		Role:    "system",
 		Content: builder.String(),
 	}
 }
@@ -184,7 +227,7 @@ func (a *Agent) MakeRequest() (*api.Request, error) {
 		a.requestOptions...,
 	)
 	request.Messages = append(request.Messages, a.GetSystemPrompt())
-	dbMessages, err := a.GetPreviousMessages(30)
+	dbMessages, err := a.GetPreviousMessages(10)
 	if err != nil {
 		return nil, err
 	}

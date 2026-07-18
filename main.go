@@ -70,9 +70,12 @@ func main() {
 	//	}
 	//	slog.SetDefault(logger)
 
-	agent.New(
+	err := agent.New(
 		convName,
 		getConfigOptions(),
 		logLevel,
 	).Loop()
+	if err != nil {
+		panic(err)
+	}
 }

@@ -23,9 +23,10 @@ func NewRequest(tools map[string]tool.Tool, logger *slog.Logger, opts ...ConfigO
 		Model:    "mistral",
 		Stream:   true,
 		Options: RequestOptions{
-			NumPredict:  300, // Limit to ~300 tokens max.
-			Temperature: 0.3, // Lower temp = more deterministic, shorter responses.
-			TopP:        0.5, // Reduce diversity.
+			NumPredict:    700, // Limit to ~300 tokens max.
+			Temperature:   0.1, // Lower temp = more deterministic, shorter responses.
+			TopP:          0.7, // Reduce diversity.
+			RepeatPenalty: 0.1,
 		},
 	}
 	for _, opt := range opts {

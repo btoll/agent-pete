@@ -43,7 +43,8 @@ type RequestOptions struct {
 	//	Seed        int     `json:"seed"`
 	Temperature float64 `json:"temperature"`
 	//	TopK        int     `json:"top_k"`
-	TopP float64 `json:"top_p"`
+	TopP          float64 `json:"top_p"`
+	RepeatPenalty float64 `json:"repeat_penalty"`
 	//	MinP        float64 `json:"min_p"`
 	//	Stop        string  `json:"stop"`
 	//	NumCtx      int     `json:"num_ctx"`
