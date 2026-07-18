@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"slices"
 
 	_ "modernc.org/sqlite"
@@ -57,7 +58,11 @@ func OpenDatabase() *sql.DB {
 func (d *DB) CommitMessage(conversationID int, role, content string) (int, error) {
 	stmt, err := d.conn.Prepare("INSERT INTO messages (conversation_id, role, content, status) VALUES (?, ?, ?, ?)")
 	if err != nil {
-		return -1, err
+		return -1, &StoreError{
+			Op:        "CommitMessage",
+			Retryable: false,
+			Err:       fmt.Errorf("DB: Prepare: %w", err),
+		}
 	}
 	defer stmt.Close()
 	status := "pending"
@@ -66,11 +71,19 @@ func (d *DB) CommitMessage(conversationID int, role, content string) (int, error
 	}
 	result, err := stmt.Exec(conversationID, role, content, status)
 	if err != nil {
-		return -1, err
+		return -1, &StoreError{
+			Op:        "CommitMessage",
+			Retryable: false,
+			Err:       fmt.Errorf("DB: stmt.Exec: %w", err),
+		}
 	}
 	i64, err := result.LastInsertId()
 	if err != nil {
-		return -1, err
+		return -1, &StoreError{
+			Op:        "CommitMessage",
+			Retryable: false,
+			Err:       fmt.Errorf("DB: LastInsertId: %w", err),
+		}
 	}
 	return int(i64), nil
 }
@@ -78,11 +91,22 @@ func (d *DB) CommitMessage(conversationID int, role, content string) (int, error
 func (d *DB) CommitToolCall(lastID int, toolCallID, funcName, arguments, res string) error {
 	stmt, err := d.conn.Prepare("INSERT INTO tool_calls (message_id, tool_call_id, tool_name, parameters, result) VALUES (?, ?, ?, ?, ?)")
 	if err != nil {
-		return err
+		return &StoreError{
+			Op:        "CommitToolCall",
+			Retryable: false,
+			Err:       fmt.Errorf("DB: Prepare: %w", err),
+		}
 	}
 	defer stmt.Close()
 	_, err = stmt.Exec(lastID, toolCallID, funcName, arguments, res)
-	return err
+	if err != nil {
+		return &StoreError{
+			Op:        "CommitToolCall",
+			Retryable: false,
+			Err:       fmt.Errorf("DB: stmt.Exec: %w", err),
+		}
+	}
+	return nil
 }
 
 func CreateDatabase() error {
@@ -126,7 +150,11 @@ func CreateDatabase() error {
 func (d *DB) GetConversationID(name string) (int, error) {
 	stmt, err := d.conn.Prepare("SELECT id FROM conversations WHERE name = ?")
 	if err != nil {
-		return -1, err
+		return -1, &StoreError{
+			Op:        "GetConversationID",
+			Retryable: false,
+			Err:       fmt.Errorf("DB: Prepare: %w", err),
+		}
 	}
 	defer stmt.Close()
 	var id int
@@ -136,32 +164,56 @@ func (d *DB) GetConversationID(name string) (int, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			stmt, err := db.Prepare("INSERT INTO conversations (name) VALUES (?)")
 			if err != nil {
-				return -1, err
+				return -1, &StoreError{
+					Op:        "GetConversationID",
+					Retryable: false,
+					Err:       fmt.Errorf("DB: Prepare: %w", err),
+				}
 			}
 			result, err := stmt.Exec(name)
 			if err != nil {
-				return -1, err
+				return -1, &StoreError{
+					Op:        "GetConversationID",
+					Retryable: false,
+					Err:       fmt.Errorf("DB: stmt.Exec: %w", err),
+				}
 			}
 			n, err := result.LastInsertId()
 			if err != nil {
-				return -1, err
+				return -1, &StoreError{
+					Op:        "GetConversationID",
+					Retryable: false,
+					Err:       fmt.Errorf("DB: LastInsertId: %w", err),
+				}
 			}
 			return int(n), nil
 		}
-		return -1, err
+		return -1, &StoreError{
+			Op:        "GetConversationID",
+			Retryable: false,
+			Err:       err,
+		}
 	}
-	return id, err
+	return id, nil
 }
 
 func (d *DB) GetNRecentMessages(conversationID int, limit int) ([]*Message, error) {
 	stmt, err := d.conn.Prepare("SELECT id, role, content FROM messages WHERE conversation_id = ? AND status = 'success' ORDER BY id DESC LIMIT ?")
 	if err != nil {
-		return nil, err
+		return nil, &StoreError{
+			Op:        "GetNRecentMessages",
+			Retryable: false,
+			Err:       fmt.Errorf("DB: Prepare: %w", err),
+		}
 	}
 	defer stmt.Close()
 	rows, err := stmt.Query(conversationID, limit)
 	if err != nil {
-		return nil, err
+		return nil, &StoreError{
+			Op:        "GetNRecentMessages",
+			Retryable: false,
+			Err:       fmt.Errorf("DB: stmt.Query: %w", err),
+		}
 	}
 	defer rows.Close()
 	m := make([]*Message, 0, limit)
@@ -169,7 +221,11 @@ func (d *DB) GetNRecentMessages(conversationID int, limit int) ([]*Message, erro
 		msg := &Message{}
 		err := rows.Scan(&msg.ID, &msg.Role, &msg.Content)
 		if err != nil {
-			return nil, err
+			return nil, &StoreError{
+				Op:        "GetNRecentMessages",
+				Retryable: false,
+				Err:       fmt.Errorf("DB: rows.Scan: %w", err),
+			}
 		}
 		m = append(m, msg)
 	}
@@ -180,12 +236,20 @@ func (d *DB) GetNRecentMessages(conversationID int, limit int) ([]*Message, erro
 func (d *DB) GetToolCallsById(messageID int) ([]ToolMessage, error) {
 	stmt, err := d.conn.Prepare("SELECT tool_call_id, tool_name, parameters, result FROM tool_calls WHERE message_id = ? ORDER BY id")
 	if err != nil {
-		return nil, err
+		return nil, &StoreError{
+			Op:        "GetToolCallsById",
+			Retryable: false,
+			Err:       fmt.Errorf("DB: Prepare: %w", err),
+		}
 	}
 	defer stmt.Close()
 	rows, err := stmt.Query(messageID)
 	if err != nil {
-		return nil, err
+		return nil, &StoreError{
+			Op:        "GetToolCallsById",
+			Retryable: false,
+			Err:       fmt.Errorf("DB: stmt.Query: %w", err),
+		}
 	}
 	defer rows.Close()
 	m := []ToolMessage{}
@@ -193,7 +257,11 @@ func (d *DB) GetToolCallsById(messageID int) ([]ToolMessage, error) {
 		msg := ToolMessage{}
 		err := rows.Scan(&msg.ID, &msg.Name, &msg.Parameters, &msg.Result)
 		if err != nil {
-			return nil, err
+			return nil, &StoreError{
+				Op:        "GetToolCallsById",
+				Retryable: false,
+				Err:       fmt.Errorf("DB: rows.Scan: %w", err),
+			}
 		}
 		m = append(m, msg)
 	}
@@ -203,12 +271,20 @@ func (d *DB) GetToolCallsById(messageID int) ([]ToolMessage, error) {
 func (d *DB) UpdateMessageStatus(rowID int, status string) error {
 	stmt, err := d.conn.Prepare("UPDATE messages SET status = ? WHERE id = ?")
 	if err != nil {
-		return err
+		return &StoreError{
+			Op:        "UpdateMessageStatus",
+			Retryable: false,
+			Err:       fmt.Errorf("DB: Prepare: %w", err),
+		}
 	}
 	defer stmt.Close()
 	_, err = stmt.Exec(status, rowID)
 	if err != nil {
-		return err
+		return &StoreError{
+			Op:        "UpdateMessageStatus",
+			Retryable: false,
+			Err:       fmt.Errorf("DB: stmt.Exec: %w", err),
+		}
 	}
 	return nil
 }

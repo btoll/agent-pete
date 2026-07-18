@@ -1,10 +1,21 @@
 # agent-pete
 
-This is a learning project.  I am using the [Ollama project] to build an AI Agent.
+`agent-pete` is:
 
-Currenty, `agent-pete` supports the [`chat`](https://docs.ollama.com/api/chat) REST API.  `agent-pete` supports both streaming (the default) and non-streaming.  Retries and exponential backoff is supported.
+- An agent built using the [Ollama project] runtime.
+- A very good boy.
 
-Tools are fully supported.
+It is a work in progress.
+
+What is supported?
+
+- The [`chat`](https://docs.ollama.com/api/chat) REST API.
+- Both streaming and non-streaming.
+- Retries (defaults to 3) and exponential backoff.
+- Tools / functions.
+- [Agent Skills].
+    + Dynamically loaded from `.agents/skills`.
+    + Appended to the system prompt.
 
 There is a limited number CLI options that are supported:
 
@@ -165,7 +176,7 @@ This is the last chunk sent by the server (because `"done": true`).  Note that i
 
 - [Ollama project]
 - [Ollama API Docs](https://docs.ollama.com/api/introduction)
-- [Agent Skills](https://agentskills.io/)
+- [Agent Skills]
 - [Go `database/sql` package docs](https://pkg.go.dev/database/sql)
 
 ## License
@@ -175,5 +186,7 @@ This is the last chunk sent by the server (because `"done": true`).  Note that i
 ## Author
 
 [Benjamin Toll](https://benjamintoll.com)
+
 [Ollama project]: https://ollama.com/
+[Agent Skills]: https://agentskills.io/
 
