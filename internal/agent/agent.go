@@ -29,13 +29,21 @@ import (
 //}
 
 type Agent struct {
-	conversationName string
-	skillsDir        string
-	store            *db.DB
-	skills           *AvailableSkills
-	tools            map[string]tool.Tool
-	logger           *slog.Logger
-	requestOptions   []api.ConfigOption
+	sessionName    string
+	skillsDir      string
+	store          *db.DB
+	skills         *AvailableSkills
+	tools          map[string]tool.Tool
+	logger         *slog.Logger
+	requestOptions []api.RequestOptions
+}
+
+func (a *Agent) SetLogger(logger *slog.Logger) {
+	a.logger = logger
+}
+
+func (a *Agent) SetSessionName(name string) {
+	a.sessionName = name
 }
 
 type AvailableSkills struct {
@@ -48,19 +56,18 @@ type Skill struct {
 	Location    string `json:"location"`
 }
 
-func New(convName string, requestOptions []api.ConfigOption, logLevel *slog.LevelVar) *Agent {
+func New(agentOptions []AgentOptions, profile []api.RequestOptions) *Agent {
 	cwd, _ := os.Getwd()
 	agent := &Agent{
-		conversationName: convName,
-		skillsDir:        filepath.Join(cwd, ".agents/skills/"),
-		store:            db.New(),
-		tools:            tool.Tools,
-		logger: slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-			Level: logLevel,
-		})),
-		requestOptions: requestOptions,
+		skillsDir:      filepath.Join(cwd, ".agents/skills/"),
+		store:          db.New(),
+		tools:          tool.Tools,
+		requestOptions: profile,
 	}
 	agent.skills = getSkills(agent.skillsDir)
+	for _, opt := range agentOptions {
+		opt(agent)
+	}
 	return agent
 }
 
@@ -146,7 +153,7 @@ func (a *Agent) CallTool(toolCall api.ToolCall) (string, error) {
 }
 
 func (a *Agent) CommitMessage(msg api.ServerMessage) (int, error) {
-	conversationID, err := a.store.GetConversationID(a.conversationName)
+	conversationID, err := a.store.GetConversationID(a.sessionName)
 	if err != nil {
 		return -1, err
 	}
@@ -179,8 +186,12 @@ func (a *Agent) GetSystemPrompt() api.SystemMessage {
 	- When asked to run a skill, first ReadFile the skill's Location, then follow its instructions.
 	- Be concise. No unnecessary explanation.
 	`)
-	b, _ := json.Marshal(a.skills)
-	builder.WriteString(string(b))
+	for _, skill := range a.skills.AvailableSkills {
+		builder.WriteString(fmt.Sprintf("- %s: %s (location: %s)\n",
+			skill.Name, skill.Description, skill.Location))
+	}
+	//	b, _ := json.Marshal(a.skills)
+	//	builder.WriteString(string(b))
 	//	builder.WriteString(`
 	//You are an agentic coding assistant with access to tools: ReadFile, WriteFile, and Add.
 	//
@@ -346,7 +357,7 @@ func (a *Agent) ExecuteAgent(request *api.Request) error {
 }
 
 func (a *Agent) GetPreviousMessages(n int) ([]*db.Message, error) {
-	conversationID, err := a.store.GetConversationID(a.conversationName)
+	conversationID, err := a.store.GetConversationID(a.sessionName)
 	if err != nil {
 		return nil, err
 	}

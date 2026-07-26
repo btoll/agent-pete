@@ -36,13 +36,12 @@ func New() *DB {
 	}
 }
 
-//func CloseDatabase() error {
-//	db = GetDatabase()
-//	if db != nil {
-//		return db.Close()
-//	}
-//	return nil
-//}
+func CloseDatabase() error {
+	if db != nil {
+		return db.Close()
+	}
+	return nil
+}
 
 func OpenDatabase() *sql.DB {
 	var err error

@@ -28,27 +28,54 @@ var (
 			//			TLSHandshakeTimeout:   5 * time.Second,
 		},
 	}
+
+	fastProfile = Profile{
+		Temperature: 0.3,
+		TopK:        20,
+		TopP:        0.9,
+		MinP:        0.1,
+		NumPredict:  256,
+		NumCtx:      2048,
+		Stop:        []string{"\n\n"},
+	}
+
+	accurateProfile = Profile{
+		Temperature: 0.1,
+		TopK:        40,
+		TopP:        0.95,
+		MinP:        0.05,
+		NumPredict:  2048,
+		NumCtx:      8192,
+	}
+
+	balancedProfile = Profile{
+		Temperature: 0.5,
+		TopK:        30,
+		TopP:        0.9,
+		MinP:        0.05,
+		NumPredict:  512,
+		NumCtx:      4096,
+		Stop:        []string{"\n\n"},
+	}
 )
 
 type Request struct {
 	Model    string          `json:"model"`
 	Stream   bool            `json:"stream"`
-	Options  RequestOptions  `json:"options"`
+	Options  Profile         `json:"options"`
 	Messages []ServerMessage `json:"messages"`
 	Tools    []tool.Tool     `json:"tools"`
 	Logger   *slog.Logger
 }
 
-type RequestOptions struct {
-	//	Seed        int     `json:"seed"`
-	Temperature float64 `json:"temperature"`
-	//	TopK        int     `json:"top_k"`
-	TopP          float64 `json:"top_p"`
-	RepeatPenalty float64 `json:"repeat_penalty"`
-	//	MinP        float64 `json:"min_p"`
-	//	Stop        string  `json:"stop"`
-	//	NumCtx      int     `json:"num_ctx"`
-	NumPredict int `json:"num_predict"`
+type Profile struct {
+	NumCtx      int      `json:"num_ctx"`
+	NumPredict  int      `json:"num_predict"`
+	TopK        int      `json:"top_k"`
+	Temperature float64  `json:"temperature"`
+	TopP        float64  `json:"top_p"`
+	MinP        float64  `json:"min_p"`
+	Stop        []string `json:"stop"`
 }
 
 type PostResponse struct {

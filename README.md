@@ -1,18 +1,28 @@
 # agent-pete
 
-This is a learning project.  I am using the [Ollama project] to build an AI Agent.
+This is a work in progress.  I am using the [Ollama project] to build an AI Agent.
 
 Currenty, `agent-pete` supports the [`chat`](https://docs.ollama.com/api/chat) REST API.  `agent-pete` supports both streaming (the default) and non-streaming.  Retries and exponential backoff is supported.
 
-Tools are fully supported.
+`agent-pete` currently supports:
+
+- tools
+- skills
+- profiles that help control control text generation
+- streaming and non-streaming
+- retries and exponential backoff
+- structured error logs for debugging
+- good feelings
+
+> Note: Free agents that can run locally are notoriously bad at multi-step inference.  They aren't large enough to be truly useful, and this is due to technical limitations.
+>
+> Unfortunately, this means that most people will then get a subscription to an AI provider.  This is all part of the fucking scam of AI.  So, don't be a loser and get a subscription.  Instead, use [`duck.ai`](https://duck.ai/) or an open source AI coding agent like [`OpenCode`](https://opencode.ai/) and their free models.
 
 There is a limited number CLI options that are supported:
 
 ```bash
-$ ./agent-pete -h
-Usage of /tmp/go-build716687853/b001/exe/agent-pete:
-  -conv string
-        Conversation ID for grouping related messages. (default "repl")
+$ agent-pete -h
+Usage of agent-pete:
   -create-database
         Create the database.  Useful for debugging.
   -debug
@@ -20,14 +30,61 @@ Usage of /tmp/go-build716687853/b001/exe/agent-pete:
   -m string
         The newest message to append to the prompt.
   -model string
-        The model. (default "mistral")
+        The model.
+  -name string
+        The name of the session, used for grouping related messages.
+  -profile string
+        The profile tunes the runtime options that control text generation (fast|accurate|balanced).
   -stream
         True to use the streaming API (/chat). (default true)
-  -tokens int
-        Total number of response tokens.
 ```
 
 This will change!  The code will change!  You will change!  Change is inevitable!
+
+## Profiles
+
+```go
+type Profile struct {
+	NumCtx      int      `json:"num_ctx"`
+	NumPredict  int      `json:"num_predict"`
+	TopK        int      `json:"top_k"`
+	Temperature float64  `json:"temperature"`
+	TopP        float64  `json:"top_p"`
+	MinP        float64  `json:"min_p"`
+	Stop        []string `json:"stop"`
+}
+
+var (
+    fastProfile = Profile{
+        Temperature: 0.3,
+        TopK:        20,
+        TopP:        0.9,
+        MinP:        0.1,
+        NumPredict:  256,
+        NumCtx:      2048,
+        Stop:        []string{"\n\n"},
+    }
+
+    accurateProfile = Profile{
+        Temperature: 0.1,
+        TopK:        40,
+        TopP:        0.95,
+        MinP:        0.05,
+        NumPredict:  2048,
+        NumCtx:      8192,
+    }
+
+    balancedProfile = Profile{
+        Temperature: 0.5,
+        TopK:        30,
+        TopP:        0.9,
+        MinP:        0.05,
+        NumPredict:  512,
+        NumCtx:      4096,
+        Stop:        []string{"\n\n"},
+    }
+)
+```
 
 ## On `chat`
 

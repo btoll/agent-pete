@@ -1,21 +1,32 @@
 package api
 
-type ConfigOption func(*Request)
+type RequestOptions func(*Request)
 
-func WithModel(model string) ConfigOption {
+func WithModel(model string) RequestOptions {
 	return func(req *Request) {
+		if model == "" {
+			req.Model = "mistral"
+			return
+		}
 		req.Model = model
 	}
 }
 
-func WithStream(stream bool) ConfigOption {
+func WithProfile(profile string) RequestOptions {
 	return func(req *Request) {
-		req.Stream = stream
+		switch profile {
+		case "accurate":
+			req.Options = accurateProfile
+		case "balanced":
+			req.Options = balancedProfile
+		default:
+			req.Options = fastProfile
+		}
 	}
 }
 
-func WithTotalResponseTokens(totalResponseTokens int) ConfigOption {
+func WithStream(stream bool) RequestOptions {
 	return func(req *Request) {
-		req.Options.NumPredict = totalResponseTokens
+		req.Stream = stream
 	}
 }

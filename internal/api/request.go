@@ -16,18 +16,10 @@ import (
 	"github.com/btoll/agent-pete/internal/tool"
 )
 
-func NewRequest(tools map[string]tool.Tool, logger *slog.Logger, opts ...ConfigOption) *Request {
+func NewRequest(tools map[string]tool.Tool, logger *slog.Logger, opts ...RequestOptions) *Request {
 	request := &Request{
 		Logger:   logger,
 		Messages: []ServerMessage{},
-		Model:    "mistral",
-		Stream:   true,
-		Options: RequestOptions{
-			NumPredict:    700, // Limit to ~300 tokens max.
-			Temperature:   0.1, // Lower temp = more deterministic, shorter responses.
-			TopP:          0.7, // Reduce diversity.
-			RepeatPenalty: 0.1,
-		},
 	}
 	for _, opt := range opts {
 		opt(request)
