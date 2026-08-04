@@ -71,12 +71,20 @@ func (c *Request) ParseStream(body io.ReadCloser) (*PostResponse, error) {
 
 		if assistantMsg, ok := modelResponse.Message.(*AssistantMessage); ok {
 			allToolCalls = append(allToolCalls, assistantMsg.ToolCalls...)
+			if c.Think {
+				chunk := assistantMsg.Thinking
+				if !c.Stream {
+					chunk += "\n\n"
+				}
+				os.Stdout.WriteString(chunk)
+			}
 		}
+
 		os.Stdout.WriteString(modelResponse.Message.GetContent())
 		builder.WriteString(modelResponse.Message.GetContent())
 
 		// Both streaming and non-streaming APIs will work as long as we capture before
-		// Done: true (actually, non-streaming is the one that requires this.
+		// Done: true (actually, non-streaming is the one that requires this).
 		if modelResponse.Done {
 			if assistantMsg, ok := modelResponse.Message.(*AssistantMessage); ok {
 				assistantMsg.ToolCalls = allToolCalls

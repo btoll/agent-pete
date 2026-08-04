@@ -19,6 +19,7 @@ var (
 	createDatabase bool
 	debug          bool
 	stream         bool
+	thinking       bool
 )
 
 func getAgentOptions() []agent.AgentOptions {
@@ -34,6 +35,7 @@ func getRequestOptions() []api.RequestOptions {
 		api.WithModel(model),
 		api.WithProfile(profile),
 		api.WithStream(stream),
+		api.WithThinking(thinking),
 	)
 }
 
@@ -56,7 +58,8 @@ func main() {
 	flag.StringVar(&sessionName, "name", "", "The name of the session, used for grouping related messages.")
 	flag.BoolVar(&createDatabase, "create-database", false, "Create the database.  Useful for debugging.")
 	flag.BoolVar(&debug, "debug", false, "Turn on verbose logging.")
-	flag.BoolVar(&stream, "stream", true, "True to use the streaming API (/chat).")
+	flag.BoolVar(&stream, "stream", false, "True to use the streaming API (/chat).")
+	flag.BoolVar(&thinking, "thinking", false, "True to print thinking output for supported models.")
 	flag.Parse()
 
 	if createDatabase {

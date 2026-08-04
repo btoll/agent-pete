@@ -8,7 +8,8 @@ Currenty, `agent-pete` supports the [`chat`](https://docs.ollama.com/api/chat) R
 
 - tools
 - skills
-- profiles that help control control text generation
+- profiles that help control text generation
+- thinking (for models that support it)
 - streaming and non-streaming
 - retries and exponential backoff
 - structured error logs for debugging
@@ -36,7 +37,9 @@ Usage of agent-pete:
   -profile string
         The profile tunes the runtime options that control text generation (fast|accurate|balanced).
   -stream
-        True to use the streaming API (/chat). (default true)
+        True to use the streaming API (/chat).
+  -thinking
+        True to print thinking output for supported models.
 ```
 
 This will change!  The code will change!  You will change!  Change is inevitable!
@@ -171,6 +174,7 @@ This is the last chunk sent by the server (because `"done": true`).  Note that i
 }
 ```
 
+<!--
 //&api.PostResponse{
 //	Role:    "assistant",
 //	Content: "",
@@ -217,6 +221,7 @@ This is the last chunk sent by the server (because `"done": true`).  Note that i
 //		},
 //	},
 //}
+-->
 
 <!--
 https://github.com/ArneJanning/local-skills-agent
@@ -227,7 +232,6 @@ https://github.com/ArneJanning/local-skills-agent
 - [Ollama project]
 - [Ollama API Docs](https://docs.ollama.com/api/introduction)
 - [Agent Skills](https://agentskills.io/)
-- [Go `database/sql` package docs](https://pkg.go.dev/database/sql)
 
 ## License
 

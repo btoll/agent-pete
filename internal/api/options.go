@@ -30,3 +30,9 @@ func WithStream(stream bool) RequestOptions {
 		req.Stream = stream
 	}
 }
+
+func WithThinking(thinking bool) RequestOptions {
+	return func(req *Request) {
+		req.Think = thinking
+	}
+}

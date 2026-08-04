@@ -179,52 +179,15 @@ func (a *Agent) ConvertTools(toolMessages []db.ToolMessage) []api.ToolCall {
 func (a *Agent) GetSystemPrompt() api.SystemMessage {
 	builder := strings.Builder{}
 	builder.WriteString(`
-	You are agent-pete, a coding assistant with access to tools: ReadFile, WriteFile, Add.
+	You are agent-pete, a coding assistant with access to tools: ReadFile, WriteFile, Add, GetWeather.
 
 	Rules:
 	- Always use tools to complete tasks. Never narrate what you would do.
 	- When asked to run a skill, first ReadFile the skill's Location, then follow its instructions.
 	- Be concise. No unnecessary explanation.
 	`)
-	for _, skill := range a.skills.AvailableSkills {
-		builder.WriteString(fmt.Sprintf("- %s: %s (location: %s)\n",
-			skill.Name, skill.Description, skill.Location))
-	}
-	//	b, _ := json.Marshal(a.skills)
-	//	builder.WriteString(string(b))
-	//	builder.WriteString(`
-	//You are an agentic coding assistant with access to tools: ReadFile, WriteFile, and Add.
-	//
-	//CRITICAL: You must call tools to complete tasks. Do not narrate or describe what you would do — actually call the tools.
-	//`)
-	//	b, _ := json.Marshal(a.skills)
-	//	builder.WriteString(string(b))
-	//	builder.WriteString(`
-	//# How to Use Skills
-	//
-	//**IMPORTANT: Automatic Skill Discovery**
-	//When a user asks you to do something, FIRST check if any available skill matches their request. Then use that skill WITHOUT being explicitly told.
-	//
-	//**To use a skill:**
-	//1. Read the skill file from .skills/ using read_file (e.g., .skills/code_quality_analyzer.md)
-	//2. Follow the instructions in that skill file
-	//3. The skill may reference supporting files (scripts, benchmarks, templates) - read those as needed
-	//4. Skills can invoke other skills (composability)
-	//
-	//**Examples:**
-	//- User: "Analyze this code" → Automatically use code_quality_analyzer skill
-	//- User: "Document this project" → Automatically use technical_documentation_generator skill
-	//- User: "Make a hello world" → Automatically use write_hello_world skill
-	//
-	//**Key Principles:**
-	//- Match user intent to skills automatically
-	//- Always read the skill file first to get detailed instructions
-	//- Skills contain step-by-step guidance - follow them precisely
-	//- Skills may have supporting resources (scripts/, benchmarks/, templates/) - use them
-	//- Never make up analysis - use the skill's methods and data
-	//
-	//When you're done with a task, provide a clear response. Always be helpful and precise.
-	//`)
+	b, _ := json.Marshal(a.skills)
+	builder.WriteString(string(b))
 	return api.SystemMessage{
 		Role:    "system",
 		Content: builder.String(),

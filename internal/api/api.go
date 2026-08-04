@@ -36,7 +36,6 @@ var (
 		MinP:        0.1,
 		NumPredict:  256,
 		NumCtx:      2048,
-		Stop:        []string{"\n\n"},
 	}
 
 	accurateProfile = Profile{
@@ -55,13 +54,13 @@ var (
 		MinP:        0.05,
 		NumPredict:  512,
 		NumCtx:      4096,
-		Stop:        []string{"\n\n"},
 	}
 )
 
 type Request struct {
 	Model    string          `json:"model"`
 	Stream   bool            `json:"stream"`
+	Think    bool            `json:"think"`
 	Options  Profile         `json:"options"`
 	Messages []ServerMessage `json:"messages"`
 	Tools    []tool.Tool     `json:"tools"`
@@ -75,7 +74,7 @@ type Profile struct {
 	Temperature float64  `json:"temperature"`
 	TopP        float64  `json:"top_p"`
 	MinP        float64  `json:"min_p"`
-	Stop        []string `json:"stop"`
+	Stop        []string `json:"stop"` // Defining stop was preventing .content from being populated, it was only .thinking (when enabled).
 }
 
 type PostResponse struct {
@@ -89,7 +88,6 @@ type BaseModelResponse struct {
 	CreatedAt          string        `json:"created_at"`
 	Message            ServerMessage `json:"message"`
 	Response           string        `json:"response"`
-	Thinking           string        `json:"thinking"`
 	Done               bool          `json:"done"`
 	DoneReason         string        `json:"done_reason"`
 	TotalDuration      int           `json:"total_duration"`
@@ -224,6 +222,7 @@ func (u UserMessage) GetRole() string {
 type AssistantMessage struct {
 	Role      string     `json:"role"`
 	Content   string     `json:"content"`
+	Thinking  string     `json:"thinking"`
 	ToolCalls []ToolCall `json:"tool_calls"`
 }
 
